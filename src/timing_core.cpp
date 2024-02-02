@@ -88,7 +88,7 @@ void TimingCore::loadAndRecord(Address addr, Address pc, BOOL type) {
     cRec.record(startCycle);
 }
 
-void TimingCore::storeAndRecord(Address addr, Address pc) {
+void TimingCore::storeAndRecord(Address addr, Address pc, BOOL type) {
     uint64_t startCycle = curCycle;
     curCycle = l1d->store(addr, curCycle, pc);
     cRec.record(startCycle);
@@ -115,8 +115,8 @@ void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, B
     static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, loadPC, type);
 }
 
-void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
-    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, storePC);
+void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
+    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, storePC, type);
 }
 
 void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -136,6 +136,6 @@ void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT
 }
 
 void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, predStorePC);
+    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, predStorePC, TRUE);
 }
 

@@ -63,7 +63,7 @@ InstrFuncPtrs NullCore::GetFuncPtrs() {
 }
 
 void NullCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {}
-void NullCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {}
+void NullCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {}
 void NullCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {}
 void NullCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {}
 

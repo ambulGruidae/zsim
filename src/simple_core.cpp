@@ -56,8 +56,12 @@ void SimpleCore::load(Address addr, Address pc, BOOL type) {
     
 }
 
-void SimpleCore::store(Address addr, Address pc) {
-    curCycle = l1d->store(addr, curCycle, pc);
+void SimpleCore::store(Address addr, Address pc, BOOL type) {
+    if (type){
+        curCycle = l1d->store(addr, curCycle, pc);
+    } else {
+        curCycle = l1s->store(addr, curCycle, pc);
+    }
 }
 
 void SimpleCore::sload(Address addr, Address pc) {
@@ -110,8 +114,8 @@ void SimpleCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type)
     static_cast<SimpleCore*>(cores[tid])->load(addr, loadPC, type);
 }
 
-void SimpleCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
-    static_cast<SimpleCore*>(cores[tid])->store(addr, storePC);
+void SimpleCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
+    static_cast<SimpleCore*>(cores[tid])->store(addr, storePC, type);
 }
 
 void SimpleCore::SloadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
@@ -127,7 +131,7 @@ void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BO
 }
 
 void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr, predStorePC);
+    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr, predStorePC, TRUE);
 }
 
 void SimpleCore::PredSloadFunc(THREADID tid, ADDRINT addr, BOOL pred) {

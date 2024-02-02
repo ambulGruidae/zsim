@@ -67,12 +67,12 @@ class TimingCore : public Core {
 
     private:
         inline void loadAndRecord(Address addr, Address pc, BOOL type);
-        inline void storeAndRecord(Address addr, Address pc);
+        inline void storeAndRecord(Address addr, Address pc, BOOL type);
         inline void bblAndRecord(Address bblAddr, BblInfo* bblInstrs);
         inline void record(uint64_t startCycle);
 
         static void LoadAndRecordFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type);
-        static void StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);
+        static void StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type);
         static void BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
         static void PredLoadAndRecordFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);
         static void PredStoreAndRecordFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred);

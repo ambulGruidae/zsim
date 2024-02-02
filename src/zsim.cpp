@@ -175,11 +175,11 @@ InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
 
 VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
     
-    fPtrs[tid].loadPtr(tid, loadPC, addr, !simulateIndexAccesses);
+    fPtrs[tid].loadPtr(tid, loadPC, addr, type);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
-    fPtrs[tid].storePtr(tid, storePC, addr);
+VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
+    fPtrs[tid].storePtr(tid, storePC, addr, type);
 }
 
 VOID PIN_FAST_ANALYSIS_CALL IndirectSloadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
@@ -237,9 +237,9 @@ VOID JoinAndLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
     fPtrs[tid].loadPtr(tid, loadPC, addr, type);
 }
 
-VOID JoinAndStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+VOID JoinAndStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
     Join(tid);
-    fPtrs[tid].storePtr(tid, storePC, addr);
+    fPtrs[tid].storePtr(tid, storePC, addr, type);
 }
 
 VOID JoinAndSloadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
@@ -283,8 +283,8 @@ VOID JoinAndPredSstoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
 }
 
 // NOP variants: Do nothing
-VOID NOPLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL type) {}
-VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {}
+// VOID NOPLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL type) {}
+VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL type) {}
 VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
 VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
 VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT predPC, ADDRINT addr, BOOL pred) {}
@@ -420,12 +420,12 @@ VOID RecordIndexIp(VOID* ip, THREADID tid) {
 
 // Non-analysis pointer vars
 static const InstrFuncPtrs joinPtrs = {JoinAndLoadSingle, JoinAndStoreSingle, JoinAndSloadSingle, JoinAndSstoreSingle, JoinAndBasicBlock, JoinAndRecordBranch, JoinAndPredLoadSingle, JoinAndPredStoreSingle, JoinAndPredSloadSingle, JoinAndPredSstoreSingle, FPTR_JOIN};
-static const InstrFuncPtrs nopPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
-static const InstrFuncPtrs retryPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_RETRY};
-static const InstrFuncPtrs ffPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, FFBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs nopPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs retryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_RETRY};
+static const InstrFuncPtrs ffPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
 
-static const InstrFuncPtrs ffiPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
-static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs ffiPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
 
 static const InstrFuncPtrs& GetFFPtrs() {
     return ffiEnabled? (ffiNFF? ffiEntryPtrs : ffiPtrs) : ffPtrs;
@@ -1665,7 +1665,6 @@ int main(int argc, char *argv[]) {
 
     //Register instrumentation
     TRACE_AddInstrumentFunction(Trace, 0);
-    // INS_AddInstrumentFunction(Instruction, 0);
     VdsoInit(); //initialized vDSO patching information (e.g., where all the possible vDSO entry points are)
 
     RTN_AddInstrumentFunction(RoutineCallback, 0);

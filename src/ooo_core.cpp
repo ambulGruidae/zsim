@@ -497,7 +497,7 @@ void OOOCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
     static_cast<OOOCore*>(cores[tid])->load(addr, loadPC);
 }
 
-void OOOCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+void OOOCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
     static_cast<OOOCore*>(cores[tid])->store(addr, storePC);
 }
 

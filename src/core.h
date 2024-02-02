@@ -42,7 +42,7 @@ struct BblInfo {
  */
 struct InstrFuncPtrs {  // NOLINT(whitespace)
     void (*loadPtr)(THREADID, ADDRINT, ADDRINT, BOOL);
-    void (*storePtr)(THREADID, ADDRINT, ADDRINT);
+    void (*storePtr)(THREADID, ADDRINT, ADDRINT, BOOL);
     void (*sloadPtr)(THREADID, ADDRINT, ADDRINT);
     void (*sstorePtr)(THREADID, ADDRINT, ADDRINT);
     void (*bblPtr)(THREADID, ADDRINT, BblInfo*);
