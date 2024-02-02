@@ -98,7 +98,8 @@ INT32 Usage() {
 GlobSimInfo* zinfo;
 bool simulateAccesses {false};
 bool simulateIndexAccesses {false};
-uint64_t numInsns {0};
+uint64_t numIns {0};
+uint64_t numIndexIns {0};
 
 /* Per-process variables */
 
@@ -172,8 +173,9 @@ VOID RecordIndexIp(VOID* ip, THREADID tid);
 
 InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
-    fPtrs[tid].loadPtr(tid, loadPC, addr);
+VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
+    
+    fPtrs[tid].loadPtr(tid, loadPC, addr, !simulateIndexAccesses);
 }
 
 VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
@@ -230,9 +232,9 @@ void Join(uint32_t tid) {
     fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
 }
 
-VOID JoinAndLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
+VOID JoinAndLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
     Join(tid);
-    fPtrs[tid].loadPtr(tid, loadPC, addr);
+    fPtrs[tid].loadPtr(tid, loadPC, addr, type);
 }
 
 VOID JoinAndStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
@@ -281,6 +283,7 @@ VOID JoinAndPredSstoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
 }
 
 // NOP variants: Do nothing
+VOID NOPLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL type) {}
 VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {}
 VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
 VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
@@ -405,19 +408,24 @@ VOID FFIEntryBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
     FFIBasicBlock(tid, bblAddr, bblInfo);
 }
 
+VOID RecordIp(VOID* ip, THREADID tid) {
+    if (simulateAccesses == true)
+        ++numIns;
+}
+
 VOID RecordIndexIp(VOID* ip, THREADID tid) {
     if (simulateIndexAccesses == true)
-        ++numInsns;
+        ++numIndexIns;
 }
 
 // Non-analysis pointer vars
 static const InstrFuncPtrs joinPtrs = {JoinAndLoadSingle, JoinAndStoreSingle, JoinAndSloadSingle, JoinAndSstoreSingle, JoinAndBasicBlock, JoinAndRecordBranch, JoinAndPredLoadSingle, JoinAndPredStoreSingle, JoinAndPredSloadSingle, JoinAndPredSstoreSingle, FPTR_JOIN};
-static const InstrFuncPtrs nopPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
-static const InstrFuncPtrs retryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_RETRY};
-static const InstrFuncPtrs ffPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs nopPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs retryPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_RETRY};
+static const InstrFuncPtrs ffPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, FFBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
 
-static const InstrFuncPtrs ffiPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
-static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs ffiPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
 
 static const InstrFuncPtrs& GetFFPtrs() {
     return ffiEnabled? (ffiNFF? ffiEntryPtrs : ffiPtrs) : ffPtrs;
@@ -633,19 +641,48 @@ VOID Instruction(INS ins) {
             IARG_THREAD_ID,
             IARG_END);
 
+        INS_InsertPredicatedCall(
+            ins, IPOINT_BEFORE, (AFUNPTR)RecordIp, 
+            IARG_INST_PTR,
+            IARG_THREAD_ID,
+            IARG_END);
+
         if (INS_IsMemoryRead(ins)) {
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD_EA, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr,
+                    IARG_FAST_ANALYSIS_CALL, 
+                    IARG_THREAD_ID, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYREAD_EA, 
+                    IARG_BOOL, !simulateIndexAccesses,
+                    IARG_END);
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, 
+                    IARG_FAST_ANALYSIS_CALL, 
+                    IARG_THREAD_ID, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYREAD_EA, 
+                    IARG_EXECUTING, 
+                    IARG_END);
             }
         }
 
         if (INS_HasMemoryRead2(ins)) {
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE, SloadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD2_EA, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, SloadFuncPtr, 
+                    IARG_FAST_ANALYSIS_CALL, 
+                    IARG_THREAD_ID, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYREAD2_EA, 
+                    IARG_END);
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE, PredSloadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, PredSloadFuncPtr, 
+                    IARG_FAST_ANALYSIS_CALL, 
+                    IARG_THREAD_ID, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYREAD2_EA, 
+                    IARG_EXECUTING, 
+                    IARG_END);
             }
         }
 
@@ -1174,7 +1211,7 @@ VOID AfterForkInChild(THREADID tid, const CONTEXT* ctxt, VOID * arg) {
 
 VOID Fini(int code, VOID * v) {
     info("Finished, code %d", code);
-    info("IndexInsNum: %ld", numInsns);
+    info("IndexInsNum/InsNum: %ld/%ld=%lf", numIndexIns, numIns, ((double)numIndexIns/numIns));
     //NOTE: In fini, it appears that info() and writes to stdout in general won't work; warn() and stderr still work fine.
     SimEnd();
 }

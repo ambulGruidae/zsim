@@ -60,13 +60,13 @@ class SimpleCore : public Core {
 
     protected:
         //Simulation functions
-        inline void load(Address addr, Address pc);
+        inline void load(Address addr, Address pc, BOOL type);
         inline void store(Address addr, Address pc);
         inline void sload(Address addr, Address pc);
         inline void sstore(Address addr, Address pc);
         inline void bbl(Address bblAddr, BblInfo* bblInstrs);
 
-        static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr);
+        static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type);
         static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);
         static void SloadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr);
         static void SstoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);

@@ -66,12 +66,12 @@ class TimingCore : public Core {
         void cSimEnd() {curCycle = cRec.cSimEnd(curCycle);}
 
     private:
-        inline void loadAndRecord(Address addr, Address pc);
+        inline void loadAndRecord(Address addr, Address pc, BOOL type);
         inline void storeAndRecord(Address addr, Address pc);
         inline void bblAndRecord(Address bblAddr, BblInfo* bblInstrs);
         inline void record(uint64_t startCycle);
 
-        static void LoadAndRecordFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr);
+        static void LoadAndRecordFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type);
         static void StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);
         static void BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
         static void PredLoadAndRecordFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);

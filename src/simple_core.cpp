@@ -47,8 +47,13 @@ uint64_t SimpleCore::getPhaseCycles() const {
     return curCycle % zinfo->phaseLength;
 }
 
-void SimpleCore::load(Address addr, Address pc) {
-    curCycle = l1d->load(addr, curCycle, pc);
+void SimpleCore::load(Address addr, Address pc, BOOL type) {
+    if (type){
+        curCycle = l1d->load(addr, curCycle, pc);
+    } else {
+        curCycle = l1s->load(addr, curCycle, pc);
+    }
+    
 }
 
 void SimpleCore::store(Address addr, Address pc) {
@@ -101,8 +106,8 @@ InstrFuncPtrs SimpleCore::GetFuncPtrs() {
     return {LoadFunc, StoreFunc, SloadFunc, SstoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, PredSloadFunc, PredSstoreFunc, FPTR_ANALYSIS, {0}};
 }
 
-void SimpleCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
-    static_cast<SimpleCore*>(cores[tid])->load(addr, loadPC);
+void SimpleCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
+    static_cast<SimpleCore*>(cores[tid])->load(addr, loadPC, type);
 }
 
 void SimpleCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
@@ -118,7 +123,7 @@ void SimpleCore::SstoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
 }
 
 void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr, predLoadPC);
+    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr, predLoadPC, TRUE);
 }
 
 void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {

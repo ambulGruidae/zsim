@@ -493,8 +493,13 @@ void OOOCore::advance(uint64_t targetCycle) {
 
 // Pin interface code
 
-void OOOCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(addr, loadPC);}
-void OOOCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->store(addr, storePC);}
+void OOOCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
+    static_cast<OOOCore*>(cores[tid])->load(addr, loadPC);
+}
+
+void OOOCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+    static_cast<OOOCore*>(cores[tid])->store(addr, storePC);
+}
 
 void OOOCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
     OOOCore* core = static_cast<OOOCore*>(cores[tid]);

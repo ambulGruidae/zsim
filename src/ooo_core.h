@@ -479,7 +479,7 @@ class OOOCore : public Core {
 
         inline void bbl(Address bblAddr, BblInfo* bblInfo);
 
-        static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr);
+        static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type);
         static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);
         static void PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);
         static void PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred);
