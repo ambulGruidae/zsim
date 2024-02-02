@@ -32,11 +32,18 @@
 #include "debug.h"
 #include "locks.h"
 #include "pad.h"
+#include "memory_hierarchy.h"
+#include "g_std/g_unordered_map.h"
 
+#include <tuple>
+
+class Cache;
+class Counter;
 class Core;
 class Scheduler;
 class AggregateStat;
 class StatsBackend;
+class RunningStats;
 class ProcessTreeNode;
 class ProcessStats;
 class ProcStats;
@@ -76,6 +83,7 @@ struct GlobSimInfo {
     //System configuration values, all read-only, set at initialization
     uint32_t numCores;
     uint32_t lineSize;
+    uint32_t mapSize;
 
     //Cores
     Core** cores;
@@ -135,6 +143,14 @@ struct GlobSimInfo {
 
     AggregateStat* rootStat;
     g_vector<StatsBackend*>* statsBackends; // used for termination dumps
+    g_vector<RunningStats*>* compressionRatioStats;
+    g_vector<RunningStats*>* evictionStats;
+    g_vector<RunningStats*>* tagUtilizationStats;
+    g_vector<RunningStats*>* dataUtilizationStats;
+    g_vector<Counter*>* tagHitStats;
+    g_vector<Counter*>* tagMissStats;
+    g_vector<Counter*>* tagAllStats;
+    g_vector<Cache*>* L3Cache;
     StatsBackend* periodicStatsBackend;
     StatsBackend* eventualStatsBackend;
     ProcessStats* processStats;
@@ -181,6 +197,20 @@ struct GlobSimInfo {
     // Trace-driven simulation (no cores)
     bool traceDriven;
     TraceDriver* traceDriver;
+
+    bool approximate;
+    // start, end, type, min, max
+    g_vector<std::tuple<uint64_t, uint64_t, DataType, DataValue, DataValue>>* approximateRegions;
+
+    uint32_t floatCutSize;
+    uint32_t mruListSize;
+    uint32_t randomLoopTrial;
+    uint32_t doubleCutSize;
+    uint16_t hashSize;
+
+    uint64_t tagHits;
+    uint64_t tagMisses;
+    uint64_t tagAll;
 };
 
 

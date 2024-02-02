@@ -74,6 +74,8 @@
 #include "virt/port_virtualizer.h"
 #include "weave_md1_mem.h" //validation, could be taken out...
 #include "zsim.h"
+#include "feedback_repl.h"
+#include "hawkeye_repl.h"
 
 extern void EndOfPhaseActions(); //in zsim.cpp
 
@@ -164,6 +166,16 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
         rp = new NRUReplPolicy(numLines, candidates);
     } else if (replType == "Rand") {
         rp = new RandReplPolicy(candidates);
+    } else if (replType == "SRRIP") {
+        uint32_t rpvMax = config.get<uint32_t>(prefix + "repl.rpvMax", 7);
+        assert(isPow2(rpvMax + 1));
+        rp = new SRRIPReplPolicy(numLines, rpvMax);
+    } else if (replType == "DRRIP") {
+        rp = new DRRIPReplPolicy(numLines);
+    } else if (replType == "Hawkeye") {
+        rp = new HawkeyeReplPolicy(numLines, ways, lineSize);
+    } else if (replType == "EVA") {
+        rp = new FeedbackReplPolicy("Global", numLines, numSets, 1000000, 1000000, 1000000, 0.0, false, "Bias");
     } else if (replType == "WayPart" || replType == "Vantage" || replType == "IdealLRUPart") {
         if (replType == "WayPart" && arrayType != "SetAssoc") panic("WayPart replacement requires SetAssoc array");
 
@@ -231,8 +243,18 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
 
     //Alright, build the array
     CacheArray* array = nullptr;
+    // sparseTagArray* stagArray = nullptr;
+    // sparseDataArray* sdataArray = nullptr;
+    // ReplPolicy* tagRP = nullptr;
+    // ReplPolicy* dataRP = nullptr;
+    // uint32_t tagRatio = config.get<uint32_t>(prefix + "tagRatio", 1);
     if (arrayType == "SetAssoc") {
         array = new SetAssocArray(numLines, ways, rp, hf);
+    } else if (arrayType == "S") {
+        // tagRP = new LRUReplPolicy<true>(numLines*tagRatio);
+        // dataRP = new LRUReplPolicy<false>(numLines);
+        // stagArray = new sparseTagArray(numLines*tagRatio, ways, tagRP, hf);
+        // sdataArray = new sparseDataArray(numLines, ways, dataRP, hf);
     } else if (arrayType == "Z") {
         array = new ZArray(numLines, ways, candidates, rp, hf);
     } else if (arrayType == "IdealLRU") {
@@ -269,13 +291,27 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     }
     rp->setCC(cc);
     if (!isTerminal) {
+        g_string hitStatName = name + g_string(" tag hits");
+        Counter* hitStats = new Counter();
+        hitStats->init(hitStatName, " ");
+        g_string missStatName = name + g_string(" tag misses");
+        Counter* missStats = new Counter();
+        missStats->init(missStatName, " ");
+        g_string allStatName = name + g_string(" all tag accesses");
+        Counter* allStats = new Counter();
+        allStats->init(allStatName, " ");
+
         if (type == "Simple") {
             cache = new Cache(numLines, cc, array, rp, accLat, invLat, name);
+        } else if (type == "Sparse") {
+            cache = new Cache(numLines, cc, array, rp, accLat, invLat, name);
         } else if (type == "Timing") {
+            g_string statName = name + g_string(" EvictionsPerAccess");
+            RunningStats* evStats = new RunningStats(statName);
             uint32_t mshrs = config.get<uint32_t>(prefix + "mshrs", 16);
             uint32_t tagLat = config.get<uint32_t>(prefix + "tagLat", 5);
             uint32_t timingCandidates = config.get<uint32_t>(prefix + "timingCandidates", candidates);
-            cache = new TimingCache(numLines, cc, array, rp, accLat, invLat, mshrs, tagLat, ways, timingCandidates, domain, name);
+            cache = new TimingCache(numLines, cc, array, rp, accLat, invLat, mshrs, tagLat, ways, timingCandidates, domain, name, evStats, hitStats, missStats, allStats);
         } else if (type == "Tracing") {
             g_string traceFile = config.get<const char*>(prefix + "traceFile","");
             if (traceFile.empty()) traceFile = g_string(zinfo->outputDir) + "/" + name + ".trace";
@@ -649,9 +685,11 @@ static void InitSystem(Config& config) {
             if (type != "Null") {
                 string icache = config.get<const char*>(prefix + "icache");
                 string dcache = config.get<const char*>(prefix + "dcache");
+                string scache = config.get<const char*>(prefix + "scache");
 
                 if (!assignedCaches.count(icache)) panic("%s: Invalid icache parameter %s", group, icache.c_str());
                 if (!assignedCaches.count(dcache)) panic("%s: Invalid dcache parameter %s", group, dcache.c_str());
+                if (!assignedCaches.count(scache)) panic("%s: Invalid scache parameter %s", group, scache.c_str());
 
                 for (uint32_t j = 0; j < cores; j++) {
                     stringstream ss;
@@ -662,6 +700,7 @@ static void InitSystem(Config& config) {
                     //Get the caches
                     CacheGroup& igroup = *cMap[icache];
                     CacheGroup& dgroup = *cMap[dcache];
+                    CacheGroup& sgroup = *cMap[scache];
 
                     if (assignedCaches[icache] >= igroup.size()) {
                         panic("%s: icache group %s (%ld caches) is fully used, can't connect more cores to it", name.c_str(), icache.c_str(), igroup.size());
@@ -680,9 +719,17 @@ static void InitSystem(Config& config) {
                     dc->setSourceId(coreIdx);
                     assignedCaches[dcache]++;
 
+                    if (assignedCaches[scache] >= sgroup.size()) {
+                        panic("%s: scache group %s (%ld caches) is fully used, can't connect more cores to it", name.c_str(), scache.c_str(), sgroup.size());
+                    }
+                    FilterCache* sc = dynamic_cast<FilterCache*>(sgroup[assignedCaches[scache]][0]);
+                    assert(sc);
+                    sc->setSourceId(coreIdx);
+                    assignedCaches[scache]++;
+
                     //Build the core
                     if (type == "Simple") {
-                        core = new (&simpleCores[j]) SimpleCore(ic, dc, name);
+                        core = new (&simpleCores[j]) SimpleCore(ic, dc, sc, name);
                     } else if (type == "Timing") {
                         uint32_t domain = j*zinfo->numDomains/cores;
                         TimingCore* tcore = new (&timingCores[j]) TimingCore(ic, dc, domain, name);

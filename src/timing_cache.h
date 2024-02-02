@@ -28,16 +28,64 @@
 
 #include "breakdown_stats.h"
 #include "cache.h"
+#include "timing_event.h"
+#include "event_recorder.h"
 
-class HitEvent;
-class MissStartEvent;
-class MissResponseEvent;
-class MissWritebackEvent;
-class ReplAccessEvent;
+// class HitEvent;
+// class MissStartEvent;
+// class MissResponseEvent;
+// class MissWritebackEvent;
+// class ReplAccessEvent;
 class TimingEvent;
+class TimingCache;
+
+class HitEvent : public TimingEvent {
+    private:
+        TimingCache* cache;
+
+    public:
+        HitEvent(TimingCache* _cache, uint32_t postDelay, int32_t domain) : TimingEvent(0, postDelay, domain), cache(_cache) {}
+        void simulate(uint64_t cycle);
+};
+
+class MissStartEvent : public TimingEvent {
+    private:
+        TimingCache* cache;
+    public:
+        uint64_t startCycle;
+        MissStartEvent(TimingCache* _cache, uint32_t postDelay, int32_t domain) : TimingEvent(0, postDelay, domain), cache(_cache) {}
+        void simulate(uint64_t cycle);
+};
+
+class MissResponseEvent : public TimingEvent {
+    private:
+        TimingCache* cache;
+        MissStartEvent* mse;
+    public:
+        MissResponseEvent(TimingCache* _cache, MissStartEvent* _mse, int32_t domain) : TimingEvent(0, 0, domain), cache(_cache), mse(_mse) {}
+        void simulate(uint64_t cycle);
+};
+
+class MissWritebackEvent : public TimingEvent {
+    private:
+        TimingCache* cache;
+        MissStartEvent* mse;
+    public:
+        MissWritebackEvent(TimingCache* _cache, MissStartEvent* _mse, uint32_t postDelay, int32_t domain) : TimingEvent(0, postDelay, domain), cache(_cache), mse(_mse) {}
+        void simulate(uint64_t cycle);
+};
+
+class ReplAccessEvent : public TimingEvent {
+    private:
+        TimingCache* cache;
+    public:
+        uint32_t accsLeft;
+        ReplAccessEvent(TimingCache* _cache, uint32_t _accsLeft, uint32_t preDelay, uint32_t postDelay, int32_t domain) : TimingEvent(preDelay, postDelay, domain), cache(_cache), accsLeft(_accsLeft) {}
+        void simulate(uint64_t cycle);
+};
 
 class TimingCache : public Cache {
-    private:
+    protected:
         uint64_t lastAccCycle, lastFreeCycle;
         uint32_t numMSHRs, activeMisses;
         g_vector<TimingEvent*> pendingQueue;
@@ -55,11 +103,14 @@ class TimingCache : public Cache {
         lock_t topLock;
         PAD();
 
+        RunningStats* evStats;
+
     public:
         TimingCache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, uint32_t mshrs,
-                uint32_t tagLat, uint32_t ways, uint32_t cands, uint32_t _domain, const g_string& _name);
+                uint32_t tagLat, uint32_t ways, uint32_t cands, uint32_t _domain, const g_string& _name, RunningStats* _evStats, Counter* _tag_hits, Counter* _tag_misses, Counter* _tag_all);
         void initStats(AggregateStat* parentStat);
 
+        virtual void dumpStats() {}
         uint64_t access(MemReq& req);
 
         void simulateHit(HitEvent* ev, uint64_t cycle);
@@ -68,7 +119,7 @@ class TimingCache : public Cache {
         void simulateMissWriteback(MissWritebackEvent* ev, uint64_t cycle, MissStartEvent* mse);
         void simulateReplAccess(ReplAccessEvent* ev, uint64_t cycle);
 
-    private:
+    protected:
         uint64_t highPrioAccess(uint64_t cycle);
         uint64_t tryLowPrioAccess(uint64_t cycle);
 };

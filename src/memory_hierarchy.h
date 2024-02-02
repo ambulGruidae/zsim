@@ -37,6 +37,7 @@
 
 /* Addresses are plain 64-bit uints. This should be kept compatible with PIN addrints */
 typedef uint64_t Address;
+typedef void* DataLine;
 
 /* Types of Access. An Access is a request that proceeds from lower to upper
  * levels of the hierarchy (core->l1->l2, etc.)
@@ -65,10 +66,55 @@ typedef enum {
     M  // exclusive and dirty
 } MESIState;
 
+typedef enum {
+    ZSIM_UINT8,
+    ZSIM_INT8,
+    ZSIM_UINT16,
+    ZSIM_INT16,
+    ZSIM_UINT32,
+    ZSIM_INT32,
+    ZSIM_UINT64,
+    ZSIM_INT64,
+    ZSIM_FLOAT,
+    ZSIM_DOUBLE
+} DataType;
+
+typedef enum {
+    ZERO,
+    REPETITIVE,
+    BASE8DELTA1,
+    BASE8DELTA2,
+    BASE8DELTA4,
+    BASE4DELTA1,
+    BASE4DELTA2,
+    BASE2DELTA1,
+    NONE,
+} BDICompressionEncoding;
+
+union DataValue
+{
+    uint8_t UINT8;
+    int8_t INT8;
+    uint16_t UINT16;
+    int16_t INT16;
+    uint32_t UINT32;
+    int32_t INT32;
+    uint64_t UINT64;
+    int64_t INT64;
+    float FLOAT;
+    double DOUBLE;
+};
+
+typedef struct {
+    DataType OperandType;
+    DataValue OperandValue;
+} DataOprand;
+
 //Convenience methods for clearer debug traces
 const char* AccessTypeName(AccessType t);
 const char* InvTypeName(InvType t);
 const char* MESIStateName(MESIState s);
+const char* DataTypeName(DataType t);
 
 inline bool IsGet(AccessType t) { return t == GETS || t == GETX; }
 inline bool IsPut(AccessType t) { return t == PUTS || t == PUTX; }
@@ -99,6 +145,8 @@ struct MemReq {
         PREFETCH      = (1<<5), //Prefetch GETS access. Only set at level where prefetch is issued; handled early in MESICC
     };
     uint32_t flags;
+
+    Address pc;
 
     inline void set(Flag f) {flags |= f;}
     inline bool is (Flag f) const {return flags & f;}

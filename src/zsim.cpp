@@ -96,6 +96,9 @@ INT32 Usage() {
 /* Global Variables */
 
 GlobSimInfo* zinfo;
+bool simulateAccesses {false};
+bool simulateIndexAccesses {false};
+uint64_t numInsns {0};
 
 /* Per-process variables */
 
@@ -154,6 +157,8 @@ VOID FakeRDTSCPost(THREADID tid, REG* eax, REG* edx);
 VOID VdsoInstrument(INS ins);
 VOID FFThread(VOID* arg);
 
+VOID RecordIndexIp(VOID* ip, THREADID tid);
+
 /* Indirect analysis calls to work around PIN's synchronization
  *
  * NOTE(dsm): Be extremely careful when modifying this code. It is simple, but
@@ -167,12 +172,20 @@ VOID FFThread(VOID* arg);
 
 InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT addr) {
-    fPtrs[tid].loadPtr(tid, addr);
+VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
+    fPtrs[tid].loadPtr(tid, loadPC, addr);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT addr) {
-    fPtrs[tid].storePtr(tid, addr);
+VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+    fPtrs[tid].storePtr(tid, storePC, addr);
+}
+
+VOID PIN_FAST_ANALYSIS_CALL IndirectSloadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
+    fPtrs[tid].sloadPtr(tid, loadPC, addr);
+}
+
+VOID PIN_FAST_ANALYSIS_CALL IndirectSstoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+    fPtrs[tid].sstorePtr(tid, storePC, addr);
 }
 
 VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -183,12 +196,20 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
-    fPtrs[tid].predLoadPtr(tid, addr, pred);
+VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
+    fPtrs[tid].predLoadPtr(tid, predLoadPC, addr, pred);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
-    fPtrs[tid].predStorePtr(tid, addr, pred);
+VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {
+    fPtrs[tid].predStorePtr(tid, predStorePC, addr, pred);
+}
+
+VOID PIN_FAST_ANALYSIS_CALL IndirectPredSloadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+    fPtrs[tid].predSloadPtr(tid, addr, pred);
+}
+
+VOID PIN_FAST_ANALYSIS_CALL IndirectPredSstoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+    fPtrs[tid].predSstorePtr(tid, addr, pred);
 }
 
 
@@ -209,14 +230,24 @@ void Join(uint32_t tid) {
     fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
 }
 
-VOID JoinAndLoadSingle(THREADID tid, ADDRINT addr) {
+VOID JoinAndLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
     Join(tid);
-    fPtrs[tid].loadPtr(tid, addr);
+    fPtrs[tid].loadPtr(tid, loadPC, addr);
 }
 
-VOID JoinAndStoreSingle(THREADID tid, ADDRINT addr) {
+VOID JoinAndStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
     Join(tid);
-    fPtrs[tid].storePtr(tid, addr);
+    fPtrs[tid].storePtr(tid, storePC, addr);
+}
+
+VOID JoinAndSloadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
+    Join(tid);
+    fPtrs[tid].sloadPtr(tid, loadPC, addr);
+}
+
+VOID JoinAndSstoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+    Join(tid);
+    fPtrs[tid].sstorePtr(tid, storePC, addr);
 }
 
 VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -229,21 +260,31 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
 }
 
-VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
     Join(tid);
-    fPtrs[tid].predLoadPtr(tid, addr, pred);
+    fPtrs[tid].predLoadPtr(tid, predLoadPC, addr, pred);
 }
 
-VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {
     Join(tid);
-    fPtrs[tid].predStorePtr(tid, addr, pred);
+    fPtrs[tid].predStorePtr(tid, predStorePC, addr, pred);
+}
+
+VOID JoinAndPredSloadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+    Join(tid);
+    fPtrs[tid].predSloadPtr(tid, addr, pred);
+}
+
+VOID JoinAndPredSstoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+    Join(tid);
+    fPtrs[tid].predSstorePtr(tid, addr, pred);
 }
 
 // NOP variants: Do nothing
-VOID NOPLoadStoreSingle(THREADID tid, ADDRINT addr) {}
+VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {}
 VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
 VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
-VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {}
+VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT predPC, ADDRINT addr, BOOL pred) {}
 
 // FF is basically NOP except for basic blocks
 VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -364,14 +405,19 @@ VOID FFIEntryBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
     FFIBasicBlock(tid, bblAddr, bblInfo);
 }
 
-// Non-analysis pointer vars
-static const InstrFuncPtrs joinPtrs = {JoinAndLoadSingle, JoinAndStoreSingle, JoinAndBasicBlock, JoinAndRecordBranch, JoinAndPredLoadSingle, JoinAndPredStoreSingle, FPTR_JOIN};
-static const InstrFuncPtrs nopPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
-static const InstrFuncPtrs retryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_RETRY};
-static const InstrFuncPtrs ffPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, FFBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
+VOID RecordIndexIp(VOID* ip, THREADID tid) {
+    if (simulateIndexAccesses == true)
+        ++numInsns;
+}
 
-static const InstrFuncPtrs ffiPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, FFIBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
-static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
+// Non-analysis pointer vars
+static const InstrFuncPtrs joinPtrs = {JoinAndLoadSingle, JoinAndStoreSingle, JoinAndSloadSingle, JoinAndSstoreSingle, JoinAndBasicBlock, JoinAndRecordBranch, JoinAndPredLoadSingle, JoinAndPredStoreSingle, JoinAndPredSloadSingle, JoinAndPredSstoreSingle, FPTR_JOIN};
+static const InstrFuncPtrs nopPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs retryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_RETRY};
+static const InstrFuncPtrs ffPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+
+static const InstrFuncPtrs ffiPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
+static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
 
 static const InstrFuncPtrs& GetFFPtrs() {
     return ffiEnabled? (ffiNFF? ffiEntryPtrs : ffiPtrs) : ffPtrs;
@@ -530,6 +576,41 @@ static void PrintIp(THREADID tid, ADDRINT ip) {
 }
 #endif
 
+void startLogging() {
+    simulateAccesses = true;
+}
+
+void stopLogging() {
+    simulateAccesses = false;
+}
+
+void startRecordIndexIp() {
+    simulateIndexAccesses = true;
+}
+
+void stopRecordIndexIp() {
+    simulateIndexAccesses = false;
+}
+
+void RoutineCallback(RTN rtn, void* v) {
+    std::string rtnName = RTN_Name(rtn);
+    if (rtnName.find("PIN_Sim_Start") != std::string::npos) {
+        RTN_Replace(rtn, AFUNPTR(startLogging));
+        // info("Instrumenting PIN_Sim_Start");
+    }   
+    if (rtnName.find("PIN_Sim_End") != std::string::npos) {
+        RTN_Replace(rtn, AFUNPTR(stopLogging));
+        // info("Instrumenting PIN_Sim_End");
+    }   
+    if (rtnName.find("PIN_Index_Start") != std::string::npos) {
+        RTN_Replace(rtn, AFUNPTR(startRecordIndexIp));
+    }   
+
+    if (rtnName.find("PIN_Index_End") != std::string::npos) {
+        RTN_Replace(rtn, AFUNPTR(stopRecordIndexIp));
+    }   
+}
+
 VOID Instruction(INS ins) {
     //Uncomment to print an instruction trace
     //INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)PrintIp, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_END);
@@ -538,30 +619,41 @@ VOID Instruction(INS ins) {
         AFUNPTR LoadFuncPtr = (AFUNPTR) IndirectLoadSingle;
         AFUNPTR StoreFuncPtr = (AFUNPTR) IndirectStoreSingle;
 
+        AFUNPTR SloadFuncPtr = (AFUNPTR) IndirectSloadSingle;
+//        AFUNPTR SstoreFuncPtr = (AFUNPTR) IndirectSstoreSingle;
+
         AFUNPTR PredLoadFuncPtr = (AFUNPTR) IndirectPredLoadSingle;
         AFUNPTR PredStoreFuncPtr = (AFUNPTR) IndirectPredStoreSingle;
 
+        AFUNPTR PredSloadFuncPtr = (AFUNPTR) IndirectPredSloadSingle;
+//        AFUNPTR PredSstoreFuncPtr = (AFUNPTR) IndirectPredSstoreSingle;
+        INS_InsertPredicatedCall(
+            ins, IPOINT_BEFORE, (AFUNPTR)RecordIndexIp, 
+            IARG_INST_PTR,
+            IARG_THREAD_ID,
+            IARG_END);
+
         if (INS_IsMemoryRead(ins)) {
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD_EA, IARG_END);
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
             }
         }
 
         if (INS_HasMemoryRead2(ins)) {
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, SloadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD2_EA, IARG_END);
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, PredSloadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
             }
         }
 
         if (INS_IsMemoryWrite(ins)) {
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE,  StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_END);
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE,  PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
             }
         }
 
@@ -599,19 +691,22 @@ VOID Instruction(INS ins) {
 
 
 VOID Trace(TRACE trace, VOID *v) {
-    if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
-        // Visit every basic block in the trace
-        for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
-            BblInfo* bblInfo = Decoder::decodeBbl(bbl, zinfo->oooDecode);
-            BBL_InsertCall(bbl, IPOINT_BEFORE /*could do IPOINT_ANYWHERE if we redid load and store simulation in OOO*/, (AFUNPTR)IndirectBasicBlock, IARG_FAST_ANALYSIS_CALL,
-                 IARG_THREAD_ID, IARG_ADDRINT, BBL_Address(bbl), IARG_PTR, bblInfo, IARG_END);
+    if (simulateAccesses){
+        // info("start in SpMV");
+        if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
+            // Visit every basic block in the trace
+            for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
+                BblInfo* bblInfo = Decoder::decodeBbl(bbl, zinfo->oooDecode);
+                BBL_InsertCall(bbl, IPOINT_BEFORE /*could do IPOINT_ANYWHERE if we redid load and store simulation in OOO*/, (AFUNPTR)IndirectBasicBlock, IARG_FAST_ANALYSIS_CALL,
+                    IARG_THREAD_ID, IARG_ADDRINT, BBL_Address(bbl), IARG_PTR, bblInfo, IARG_END);
+            }
         }
-    }
 
-    //Instruction instrumentation now here to ensure proper ordering
-    for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
-        for (INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins = INS_Next(ins)) {
-            Instruction(ins);
+        //Instruction instrumentation now here to ensure proper ordering
+        for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
+            for (INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins = INS_Next(ins)) {
+                Instruction(ins);
+            }
         }
     }
 }
@@ -1079,6 +1174,7 @@ VOID AfterForkInChild(THREADID tid, const CONTEXT* ctxt, VOID * arg) {
 
 VOID Fini(int code, VOID * v) {
     info("Finished, code %d", code);
+    info("IndexInsNum: %ld", numInsns);
     //NOTE: In fini, it appears that info() and writes to stdout in general won't work; warn() and stderr still work fine.
     SimEnd();
 }
@@ -1532,7 +1628,10 @@ int main(int argc, char *argv[]) {
 
     //Register instrumentation
     TRACE_AddInstrumentFunction(Trace, 0);
+    // INS_AddInstrumentFunction(Instruction, 0);
     VdsoInit(); //initialized vDSO patching information (e.g., where all the possible vDSO entry points are)
+
+    RTN_AddInstrumentFunction(RoutineCallback, 0);
 
     PIN_AddThreadStartFunction(ThreadStart, 0);
     PIN_AddThreadFiniFunction(ThreadFini, 0);

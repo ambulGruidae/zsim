@@ -38,6 +38,7 @@ class SimpleCore : public Core {
     protected:
         FilterCache* l1i;
         FilterCache* l1d;
+        FilterCache* l1s; // sparse cache
 
         uint64_t instrs;
         uint64_t curCycle;
@@ -45,7 +46,7 @@ class SimpleCore : public Core {
         uint64_t haltedCycles;
 
     public:
-        SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name);
+        SimpleCore(FilterCache* _l1i, FilterCache* _l1d, FilterCache* _l1s, g_string& _name);
         void initStats(AggregateStat* parentStat);
 
         uint64_t getInstrs() const {return instrs;}
@@ -59,15 +60,21 @@ class SimpleCore : public Core {
 
     protected:
         //Simulation functions
-        inline void load(Address addr);
-        inline void store(Address addr);
+        inline void load(Address addr, Address pc);
+        inline void store(Address addr, Address pc);
+        inline void sload(Address addr, Address pc);
+        inline void sstore(Address addr, Address pc);
         inline void bbl(Address bblAddr, BblInfo* bblInstrs);
 
-        static void LoadFunc(THREADID tid, ADDRINT addr);
-        static void StoreFunc(THREADID tid, ADDRINT addr);
+        static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr);
+        static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);
+        static void SloadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr);
+        static void SstoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);
         static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
-        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
+        static void PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);
+        static void PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred);
+        static void PredSloadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+        static void PredSstoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
 
         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
 }  ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent

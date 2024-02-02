@@ -27,7 +27,7 @@
 #include "filter_cache.h"
 #include "zsim.h"
 
-SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0) {
+SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, FilterCache* _l1s, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), l1s(_l1s), instrs(0), curCycle(0), haltedCycles(0) {
 }
 
 void SimpleCore::initStats(AggregateStat* parentStat) {
@@ -47,12 +47,20 @@ uint64_t SimpleCore::getPhaseCycles() const {
     return curCycle % zinfo->phaseLength;
 }
 
-void SimpleCore::load(Address addr) {
-    curCycle = l1d->load(addr, curCycle);
+void SimpleCore::load(Address addr, Address pc) {
+    curCycle = l1d->load(addr, curCycle, pc);
 }
 
-void SimpleCore::store(Address addr) {
-    curCycle = l1d->store(addr, curCycle);
+void SimpleCore::store(Address addr, Address pc) {
+    curCycle = l1d->store(addr, curCycle, pc);
+}
+
+void SimpleCore::sload(Address addr, Address pc) {
+    curCycle = l1s->sload(addr, curCycle, pc);
+}
+
+void SimpleCore::sstore(Address addr, Address pc) {
+    curCycle = l1s->sstore(addr, curCycle, pc);
 }
 
 void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
@@ -63,7 +71,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
 
     Address endBblAddr = bblAddr + bblInfo->bytes;
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
-        curCycle = l1i->load(fetchAddr, curCycle);
+        curCycle = l1i->load(fetchAddr, curCycle, 0);
     }
 }
 
@@ -71,6 +79,7 @@ void SimpleCore::contextSwitch(int32_t gid) {
     if (gid == -1) {
         l1i->contextSwitch();
         l1d->contextSwitch();
+        l1s->contextSwitch();
     }
 }
 
@@ -89,23 +98,39 @@ void SimpleCore::join() {
 //Static class functions: Function pointers and trampolines
 
 InstrFuncPtrs SimpleCore::GetFuncPtrs() {
-    return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};
+    return {LoadFunc, StoreFunc, SloadFunc, SstoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, PredSloadFunc, PredSstoreFunc, FPTR_ANALYSIS, {0}};
 }
 
-void SimpleCore::LoadFunc(THREADID tid, ADDRINT addr) {
-    static_cast<SimpleCore*>(cores[tid])->load(addr);
+void SimpleCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
+    static_cast<SimpleCore*>(cores[tid])->load(addr, loadPC);
 }
 
-void SimpleCore::StoreFunc(THREADID tid, ADDRINT addr) {
-    static_cast<SimpleCore*>(cores[tid])->store(addr);
+void SimpleCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+    static_cast<SimpleCore*>(cores[tid])->store(addr, storePC);
 }
 
-void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr);
+void SimpleCore::SloadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr) {
+    static_cast<SimpleCore*>(cores[tid])->sload(addr, loadPC);
 }
 
-void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr);
+void SimpleCore::SstoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr) {
+    static_cast<SimpleCore*>(cores[tid])->sstore(addr, storePC);
+}
+
+void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
+    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr, predLoadPC);
+}
+
+void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {
+    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr, predStorePC);
+}
+
+void SimpleCore::PredSloadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+    if (pred) static_cast<SimpleCore*>(cores[tid])->sload(addr, 0);
+}
+
+void SimpleCore::PredSstoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+    if (pred) static_cast<SimpleCore*>(cores[tid])->sstore(addr, 0);
 }
 
 void SimpleCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {

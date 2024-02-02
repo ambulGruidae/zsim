@@ -64,6 +64,11 @@ class ReplPolicy : public GlobAlloc {
 #define DECL_RANK_BINDING(T) uint32_t rankCands(const MemReq* req, T cands) { return rank(req, cands); }
 #define DECL_RANK_BINDINGS DECL_RANK_BINDING(SetAssocCands); DECL_RANK_BINDING(ZCands);
 
+#define CACHE_HIT               0
+#define SEARCHING_FOR_VICTIM    1
+#define CLEAR_CACHE_ENTRY       0   // set entry instruction Address to 0 to indicate an invalid PC entry                  
+#define CLEAR_RPV               -1  // set Re-reference prediction value to invalid entry
+
 /* Legacy support.
  * - On each replacement, the controller first calls startReplacement(), indicating the line that will be inserted;
  *   then it calls recordCandidate() for each candidate it finds; finally, it calls getBestCandidate() to get the
@@ -370,6 +375,161 @@ class LFUReplPolicy : public LegacyReplPolicy {
             bestRank.reset();
             array[id].acc = 0;
         }
+};
+
+
+class SRRIPReplPolicy : public ReplPolicy {
+    protected:
+        // add class member variables here
+        uint64_t* array;
+        // Holds the immediacy value (i.e. timestamp) corresponding to the instruction_array; range = 0 to 3
+        uint32_t numLines; // number of entries in the cache
+        uint32_t rpvMax;   // The value at of an cache entry for which it will be replace by on a cache miss
+        bool isReplaced;
+
+    public:
+        // add member methods here, refer to repl_policies.h
+		// 10/23 DA: Need to implement rank(), update(), and replaced()
+    
+        // Constructor
+		explicit SRRIPReplPolicy(uint32_t _numLines, uint32_t _rpvMax) : numLines(_numLines), rpvMax(_rpvMax) {
+            array = gm_calloc<uint64_t>(numLines);
+			for(uint64_t i = 0; i <= numLines; i++) {
+		        array[i] = rpvMax;
+			}
+        }
+	    ~SRRIPReplPolicy() {
+			gm_free(array);
+        }
+        // input: id = the index in the array of the hit/miss we want to update
+		void update(uint32_t id, const MemReq* req) {
+            // Reset isReplaced to be false
+            if(isReplaced) {
+                assert(array[id] == (uint64_t)CLEAR_RPV);
+                array[id] = rpvMax - 1;
+            }
+            else {// update() called after a HIT!!!
+                array[id] = CACHE_HIT;
+            }
+
+            isReplaced = false;
+            
+            assert(array[id] >= 0);
+            assert(array[id] <= rpvMax);
+		}
+
+        void replaced(uint32_t id) {           
+            assert(id >= 0);
+            assert(id <= numLines); 
+            
+            isReplaced = true; // used to set value in update()
+            array[id] = (uint64_t)CLEAR_RPV;
+        }
+          
+        template <typename C> inline uint32_t rank(const MemReq* req, C cands) {
+            uint32_t id = -1;
+            
+            // Will remain in here until it finds the earliest entry with rpvMax
+            // If no entry has rpvMax it will increment the all values in the array
+            // until eventually there is a match
+            while (SEARCHING_FOR_VICTIM) {
+                for (auto ci = cands.begin(); ci != cands.end(); ci.inc()) {
+                    id = *ci;
+                    if (array[id] == rpvMax) // 3
+                    {
+                        assert(array[id] >= 0);
+                        assert(array[id] <= rpvMax);
+                        return id; // FOUND VICTIM, return its ID
+                    }
+                }
+                // No match found! Increment each RRPV value in cache and search again
+                for (auto ci = cands.begin(); ci != cands.end(); ci.inc()) {
+                    id = *ci;
+                    array[id] = MIN(array[id] + 1, rpvMax);
+                }                          
+            }
+        }   
+        DECL_RANK_BINDINGS; 
+};
+
+typedef enum {
+   IM, //immediate,
+    N, //near_immediate,
+    F, //far,
+    D  //distant
+} DRRIP;
+
+class DRRIPReplPolicy : public ReplPolicy {
+    protected:
+        uint64_t* array;
+        uint32_t numLines;
+        uint64_t timestamp;
+        DRRIP* repl_state;
+
+    public:
+        explicit DRRIPReplPolicy(uint32_t _numLines) : numLines(_numLines), timestamp(1) {
+            array = gm_calloc<uint64_t>(numLines);
+            for(uint64_t i = 0; i <= numLines; i++) {
+                array[i] = 0;
+            }
+            repl_state = gm_calloc<DRRIP>(numLines);
+        }
+
+        ~DRRIPReplPolicy() {
+            gm_free(array);
+            gm_free(repl_state);
+        }
+
+        void update(uint32_t id, const MemReq* req) {
+            array[id] = timestamp++;
+            repl_state[id] = IM;
+        }
+
+        void replaced(uint32_t id) {
+            array[id] = 0;
+        }
+
+        template <typename C> inline uint32_t rank(const MemReq* req, C cands) {
+            // update the DRRIP repl states upon a miss
+            bool flag = false;  //the states are defined in memory_hierarchy.h
+            int cur_id;
+            while (!flag) {
+                for (auto ci = cands.begin(); ci != cands.end(); ci.inc()) {
+                    int id = *ci;
+                    //info("The current state is %d, numlines is %d", id, numLines);
+                    int cur_state = (int) repl_state[id];
+                    cur_state = (cur_state == D) ? cur_state : cur_state + 1;
+                    if (cur_state == D) {
+                        cur_id = id;
+                        flag = true;
+                    }  // select one of the blocks
+                }
+                if (!flag) {  // increment states of everyone
+                    for (auto ci = cands.begin(); ci != cands.end(); ci.inc()) {
+                        int id = *ci;
+                        switch (repl_state[id]) {
+                            case IM:
+                                repl_state[id] = N;
+                                break;
+                            case N:
+                                repl_state[id] = F;
+                                break;
+                            case F:
+                                repl_state[id] = D;
+                                break;
+                            case D:
+                                panic("Incrementing states although one is already at distant state");
+                                break;
+                            default:;
+                        }
+                    }
+                }
+            }
+            return cur_id; // return the selected block
+        }
+
+        DECL_RANK_BINDINGS; 
+
 };
 
 //Extends a given replacement policy to profile access ordering violations

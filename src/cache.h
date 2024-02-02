@@ -52,17 +52,23 @@ class Cache : public BaseCache {
         //Latencies
         uint32_t accLat; //latency of a normal access (could split in get/put, probably not needed)
         uint32_t invLat; //latency of an invalidation
+        uint32_t totalMissLat; //average miss latency
+        uint32_t numMisses; //total number of misses
 
         g_string name;
+        Counter* tag_hits;
+        Counter* tag_misses;
+        Counter* tag_all;
 
     public:
-        Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, const g_string& _name);
+        Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, const g_string& _name, Counter* _tag_hits = NULL, Counter* _tag_misses = NULL, Counter* _tag_all = NULL);
 
         const char* getName();
         void setParents(uint32_t _childId, const g_vector<MemObject*>& parents, Network* network);
         void setChildren(const g_vector<BaseCache*>& children, Network* network);
         void initStats(AggregateStat* parentStat);
 
+        virtual void dumpStats() {}
         virtual uint64_t access(MemReq& req);
 
         //NOTE: reqWriteback is pulled up to true, but not pulled down to false.

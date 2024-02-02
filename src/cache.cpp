@@ -30,8 +30,11 @@
 #include "timing_event.h"
 #include "zsim.h"
 
-Cache::Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, const g_string& _name)
-    : cc(_cc), array(_array), rp(_rp), numLines(_numLines), accLat(_accLat), invLat(_invLat), name(_name) {}
+Cache::Cache(uint32_t _numLines, CC* _cc, CacheArray* _array, ReplPolicy* _rp, uint32_t _accLat, uint32_t _invLat, const g_string& _name, Counter* _tag_hits, Counter* _tag_misses, Counter* _tag_all)
+    : cc(_cc), array(_array), rp(_rp), numLines(_numLines), accLat(_accLat), invLat(_invLat), name(_name), tag_hits(_tag_hits), tag_misses(_tag_misses), tag_all(_tag_all) {
+        totalMissLat = 0;
+        numMisses = 0;
+    }
 
 const char* Cache::getName() {
     return name.c_str();
@@ -59,24 +62,34 @@ void Cache::initCacheStats(AggregateStat* cacheStat) {
 }
 
 uint64_t Cache::access(MemReq& req) {
+    if (tag_all) tag_all->inc();
     uint64_t respCycle = req.cycle;
     bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
+    bool directToCPU = false; //directly supply the data to CPU if cannot be cached
+    bool isMiss = false;
     if (likely(!skipAccess)) {
         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
         int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
         respCycle += accLat;
 
         if (lineId == -1 && cc->shouldAllocate(req)) {
+            if (tag_misses) tag_misses->inc();
             //Make space for new line
+            isMiss = true;
             Address wbLineAddr;
             lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId to replace
-            trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
+            if (lineId == -1) directToCPU = true; //no space, direct to CPU
+            else {
+                trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
 
-            //Evictions are not in the critical path in any sane implementation -- we do not include their delays
-            //NOTE: We might be "evicting" an invalid line for all we know. Coherence controllers will know what to do
-            cc->processEviction(req, wbLineAddr, lineId, respCycle); //1. if needed, send invalidates/downgrades to lower level
+                //Evictions are not in the critical path in any sane implementation -- we do not include their delays
+                //NOTE: We might be "evicting" an invalid line for all we know. Coherence controllers will know what to do
+                cc->processEviction(req, wbLineAddr, lineId, respCycle); //1. if needed, send invalidates/downgrades to lower level
 
-            array->postinsert(req.lineAddr, &req, lineId); //do the actual insertion. NOTE: Now we must split insert into a 2-phase thing because cc unlocks us.
+                array->postinsert(req.lineAddr, &req, lineId); //do the actual insertion. NOTE: Now we must split insert into a 2-phase thing because cc unlocks us.
+            }
+        } else {
+            if (tag_hits) tag_hits->inc();
         }
         // Enforce single-record invariant: Writeback access may have a timing
         // record. If so, read it.
@@ -87,8 +100,17 @@ uint64_t Cache::access(MemReq& req) {
             wbAcc = evRec->popRecord();
         }
 
-        respCycle = cc->processAccess(req, lineId, respCycle);
+        if (directToCPU) {
+            respCycle += totalMissLat/numMisses;
+        }
+        else {
+            respCycle = cc->processAccess(req, lineId, respCycle);
+        }
 
+        if (isMiss) {
+            totalMissLat += respCycle - req.cycle;
+            numMisses++;
+        }
         // Access may have generated another timing record. If *both* access
         // and wb have records, stitch them together
         if (unlikely(wbAcc.isValid())) {

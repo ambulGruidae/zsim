@@ -77,7 +77,9 @@
 #include <stdint.h>
 #include <string>
 #include "g_std/g_vector.h"
+#include "g_std/g_string.h"
 #include "log.h"
+#include <fstream>
 
 class Stat : public GlobAlloc {
     protected:
@@ -215,12 +217,19 @@ class VectorStat : public Stat {
 class Counter : public ScalarStat {
     private:
         uint64_t _count;
+        g_string name;
 
     public:
         Counter() : ScalarStat(), _count(0) {}
 
         void init(const char* name, const char* desc) {
             initStat(name, desc);
+            _count = 0;
+        }
+
+        void init(const g_string name, const char* desc) {
+            initStat(name.c_str(), desc);
+            this->name = name;
             _count = 0;
         }
 
@@ -246,6 +255,14 @@ class Counter : public ScalarStat {
 
         inline void set(uint64_t data) {
             _count = data;
+        }
+
+        void dump() {
+            info("%s: %lu", name.c_str(), _count);
+        }
+
+        void dumpFile(std::ofstream* file) {
+            (*file) << name.c_str() << ": " << _count << "\n";
         }
 };
 
@@ -412,6 +429,29 @@ class HDF5Backend : public StatsBackend {
     public:
         HDF5Backend(const char* filename, AggregateStat* rootStat, size_t bytesPerWrite, bool skipVectors, bool sumRegularAggregates);
         virtual void dump(bool buffered);
+};
+
+class RunningStats {
+    public:
+        explicit RunningStats(g_string& name) throw();
+        void add(double sample, double weight = 1) throw();
+        void reset() throw();
+        double getMin() const throw();
+        double getMax() const throw();
+        double getMean() const throw();
+        double getStdDev() const throw();
+        void combineWith(const RunningStats &otherStats) throw();
+        inline unsigned long long sampleCount() { return numSamples; }
+        void dump();
+        void dumpFile(std::ofstream* file);
+    private:
+        double minimum;
+        double maximum;
+        double mean;
+        double varNumer;
+        double weightSum;
+        unsigned long long numSamples;
+        g_string name;
 };
 
 #endif  // STATS_H_
