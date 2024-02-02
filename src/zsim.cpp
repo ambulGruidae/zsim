@@ -688,16 +688,34 @@ VOID Instruction(INS ins) {
 
         if (INS_IsMemoryWrite(ins)) {
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, 
+                    IARG_FAST_ANALYSIS_CALL, 
+                    IARG_THREAD_ID, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYWRITE_EA, 
+                    IARG_BOOL, !simulateIndexAccesses,
+                    IARG_END);
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
+                INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, 
+                    IARG_FAST_ANALYSIS_CALL, 
+                    IARG_THREAD_ID, 
+                    IARG_INST_PTR, 
+                    IARG_MEMORYWRITE_EA, 
+                    IARG_EXECUTING, 
+                    IARG_END);
             }
         }
 
         // Instrument only conditional branches
         if (INS_Category(ins) == XED_CATEGORY_COND_BR) {
-            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) IndirectRecordBranch, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
-                    IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, IARG_FALLTHROUGH_ADDR, IARG_END);
+            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) IndirectRecordBranch,
+                IARG_FAST_ANALYSIS_CALL, 
+                IARG_THREAD_ID,
+                IARG_INST_PTR, 
+                IARG_BRANCH_TAKEN, 
+                IARG_BRANCH_TARGET_ADDR, 
+                IARG_FALLTHROUGH_ADDR, 
+                IARG_END);
         }
     }
 
