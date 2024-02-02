@@ -84,7 +84,7 @@ def buildSim(cppFlags, dir, type, pgo=None):
     env["PINCPPFLAGS"] = " -DMT_SAFE_LOG "
 
     # PIN-specific libraries
-    env["PINLINKFLAGS"] = " -Wl,--hash-style=sysv -Wl,-Bsymbolic -Wl,--version-script=" + joinpath(pinInclDir, "pintool.ver")
+    env["PINLINKFLAGS"] = " -lstdc++ -Wl,--hash-style=sysv -Wl,-Bsymbolic -Wl,--version-script=" + joinpath(pinInclDir, "pintool.ver")
 
     # To prime system libs, we include /usr/lib and /usr/lib/x86_64-linux-gnu
     # first in lib path. In particular, this solves the issue that, in some
@@ -151,7 +151,7 @@ def buildSim(cppFlags, dir, type, pgo=None):
     env["CPPPATH"] += ["."]
 
     # HDF5
-    env["PINLIBS"] += ["hdf5", "hdf5_hl"]
+    env["PINLIBS"] += ["hdf5", "hdf5_hl", "z"]
 
     # Harness needs these defined
     env["CPPFLAGS"] += ' -DPIN_PATH="' + joinpath(PINPATH, "intel64/bin/pinbin") + '" '
@@ -187,10 +187,10 @@ if GetOption('debugBuild'): buildTypes.append("debug")
 if GetOption('releaseBuild'): buildTypes.append("release")
 if GetOption('optBuild') or len(buildTypes) == 0: buildTypes.append("opt")
 
-march = "core2" # ensure compatibility across condor nodes
-#march = "native" # for profiling runs
+# march = "core2" # ensure compatibility across condor nodes
+march = "native" # for profiling runs
 
-buildFlags = {"debug": "-g -O0",
+buildFlags = {"debug": " -g -O0",
               "opt": "-march=%s -g -O3 -funroll-loops" % march, # unroll loops tends to help in zsim, but in general it can cause slowdown
               "release": "-march=%s -O3 -DNASSERT -funroll-loops -fweb" % march} # fweb saves ~4% exec time, but makes debugging a world of pain, so careful
 
