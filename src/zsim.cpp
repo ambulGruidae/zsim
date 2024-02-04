@@ -600,6 +600,8 @@ void stopRecordIndexIp() {
     simulateIndexAccesses = false;
 }
 
+void nopRecord() {}
+
 void RoutineCallback(RTN rtn, void* v) {
     std::string rtnName = RTN_Name(rtn);
     if (rtnName.find("PIN_Sim_Start") != std::string::npos) {
@@ -613,9 +615,15 @@ void RoutineCallback(RTN rtn, void* v) {
     if (rtnName.find("PIN_Index_Start") != std::string::npos) {
         RTN_Replace(rtn, AFUNPTR(startRecordIndexIp));
     }   
-
     if (rtnName.find("PIN_Index_End") != std::string::npos) {
         RTN_Replace(rtn, AFUNPTR(stopRecordIndexIp));
+    }   
+    if (rtnName.find("PIN_Nop_Start") != std::string::npos) {
+        info("Instrumenting PIN_Nop_Start")
+        RTN_Replace(rtn, AFUNPTR(nopRecord));
+    }   
+    if (rtnName.find("PIN_Nop_End") != std::string::npos) {
+        RTN_Replace(rtn, AFUNPTR(nopRecord));
     }   
 }
 
@@ -726,18 +734,34 @@ VOID Instruction(INS ins) {
      */
     if (INS_IsXchg(ins) && INS_OperandReg(ins, 0) == REG_RCX && INS_OperandReg(ins, 1) == REG_RCX) {
         //info("Instrumenting magic op");
-        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleMagicOp, IARG_THREAD_ID, IARG_REG_VALUE, REG_ECX, IARG_END);
+        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleMagicOp, 
+            IARG_THREAD_ID, 
+            IARG_REG_VALUE, REG_ECX, 
+            IARG_END);
     }
 
     if (INS_Opcode(ins) == XED_ICLASS_CPUID) {
-       INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) FakeCPUIDPre, IARG_THREAD_ID, IARG_REG_VALUE, REG_EAX, IARG_REG_VALUE, REG_ECX, IARG_END);
-       INS_InsertCall(ins, IPOINT_AFTER, (AFUNPTR) FakeCPUIDPost, IARG_THREAD_ID, IARG_REG_REFERENCE, REG_EAX,
-               IARG_REG_REFERENCE, REG_EBX, IARG_REG_REFERENCE, REG_ECX, IARG_REG_REFERENCE, REG_EDX, IARG_END);
+        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) FakeCPUIDPre, 
+            IARG_THREAD_ID, 
+            IARG_REG_VALUE, REG_EAX, 
+            IARG_REG_VALUE, REG_ECX, 
+            IARG_END);
+        INS_InsertCall(ins, IPOINT_AFTER, (AFUNPTR) FakeCPUIDPost, 
+            IARG_THREAD_ID, 
+            IARG_REG_REFERENCE, REG_EAX,
+            IARG_REG_REFERENCE, REG_EBX, 
+            IARG_REG_REFERENCE, REG_ECX, 
+            IARG_REG_REFERENCE, REG_EDX, 
+            IARG_END);
     }
 
     if (INS_IsRDTSC(ins)) {
         //No pre; note that this also instruments RDTSCP
-        INS_InsertCall(ins, IPOINT_AFTER, (AFUNPTR) FakeRDTSCPost, IARG_THREAD_ID, IARG_REG_REFERENCE, REG_EAX, IARG_REG_REFERENCE, REG_EDX, IARG_END);
+        INS_InsertCall(ins, IPOINT_AFTER, (AFUNPTR) FakeRDTSCPost,
+            IARG_THREAD_ID, 
+            IARG_REG_REFERENCE, REG_EAX, 
+            IARG_REG_REFERENCE, REG_EDX, 
+            IARG_END);
     }
 
     //Must run for every instruction
@@ -752,8 +776,13 @@ VOID Trace(TRACE trace, VOID *v) {
             // Visit every basic block in the trace
             for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
                 BblInfo* bblInfo = Decoder::decodeBbl(bbl, zinfo->oooDecode);
-                BBL_InsertCall(bbl, IPOINT_BEFORE /*could do IPOINT_ANYWHERE if we redid load and store simulation in OOO*/, (AFUNPTR)IndirectBasicBlock, IARG_FAST_ANALYSIS_CALL,
-                    IARG_THREAD_ID, IARG_ADDRINT, BBL_Address(bbl), IARG_PTR, bblInfo, IARG_END);
+                BBL_InsertCall(bbl, IPOINT_BEFORE /*could do IPOINT_ANYWHERE if we redid load and store simulation in OOO*/, 
+                    (AFUNPTR)IndirectBasicBlock, 
+                    IARG_FAST_ANALYSIS_CALL,
+                    IARG_THREAD_ID, 
+                    IARG_ADDRINT, BBL_Address(bbl), 
+                    IARG_PTR, bblInfo, 
+                    IARG_END);
             }
         }
 

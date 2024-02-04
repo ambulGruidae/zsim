@@ -48,19 +48,23 @@ uint64_t SimpleCore::getPhaseCycles() const {
 }
 
 void SimpleCore::load(Address addr, Address pc, BOOL type) {
+    uint64_t _curCycle = curCycle;
     if (type){
         curCycle = l1d->load(addr, curCycle, pc);
     } else {
         curCycle = l1s->load(addr, curCycle, pc);
+        curCycle = _curCycle + 1;
     }
     
 }
 
 void SimpleCore::store(Address addr, Address pc, BOOL type) {
+    uint64_t _curCycle = curCycle;
     if (type){
         curCycle = l1d->store(addr, curCycle, pc);
     } else {
         curCycle = l1s->store(addr, curCycle, pc);
+        curCycle = _curCycle + 1;
     }
 }
 
