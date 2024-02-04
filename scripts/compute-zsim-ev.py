@@ -6,7 +6,6 @@ f = h5py.File('zsim.h5', 'r')
 dest = f["stats"]["root"]
 
 stats = dest[-1]
-print(dest.shape[0])
 
 time = stats['time']
 
@@ -18,6 +17,7 @@ totalCycles = coreStats['cycles']
 totalCycles_avg = np.average(totalCycles)
 
 ipc_avg = (1. * totalInstrs_avg) / totalCycles_avg
+print("Cycles:", format(totalCycles_avg,","))
 print("IPC:", ipc_avg)
 
 
@@ -57,21 +57,39 @@ l1i_misses_avg = np.average(l1i_misses)
 l1i_hit_rate_avg = (1. * (l1i_all_avg - l1i_misses_avg)) / l1i_all_avg
 print("L1i hit rate:", l1i_hit_rate_avg)
 
-# NOTE: compute L2 miss rate
-l2CacheStats = stats['l2']
-# print(l2CacheStats.dtype.names)
-l2_hGETS = l2CacheStats['hGETS']
-l2_hGETX = l2CacheStats['hGETX']
-l2_mGETS = l2CacheStats['mGETS']
-l2_mGETXIM = l2CacheStats['mGETXIM']
-l2_mGETXSM = l2CacheStats['mGETXSM']
+# NOTE: compute l1s miss rate
+l1sCacheStats = stats['l1s']
+# print(l1sCacheStats.dtype.names)
+l1s_fhGETS = l1sCacheStats['fhGETS']
+l1s_fhGETX = l1sCacheStats['fhGETX']
+l1s_hGETS = l1sCacheStats['hGETS']
+l1s_hGETX = l1sCacheStats['hGETX']
+l1s_mGETS = l1sCacheStats['mGETS']
+l1s_mGETXIM = l1sCacheStats['mGETXIM']
+l1s_mGETXSM = l1sCacheStats['mGETXSM']
 
-l2_all =  l2_hGETS + l2_hGETX + l2_mGETS + l2_mGETXIM + l2_mGETXSM
-l2_all_avg = np.average(l2_all)
-l2_misses =  l2_mGETS + l2_mGETXIM + l2_mGETXSM
-l2_misses_avg = np.average(l2_misses)
-l2_hit_rate_avg = (1. * (l2_all_avg - l2_misses_avg)) / l2_all_avg
-print("L2 hit rate:", l2_hit_rate_avg)
+l1s_all = l1s_fhGETS + l1s_fhGETX + l1s_hGETS + l1s_hGETX + l1s_mGETS + l1s_mGETXIM + l1s_mGETXSM
+l1s_all_avg = np.average(l1s_all)
+l1s_misses = l1s_mGETS + l1s_mGETXIM + l1s_mGETXSM
+l1s_misses_avg = np.average(l1s_misses)
+l1s_hit_rate_avg = (1. * (l1s_all_avg - l1s_misses_avg)) / l1s_all_avg
+print("L1s hit rate:", l1s_hit_rate_avg)
+
+# # NOTE: compute L2 miss rate
+# l2CacheStats = stats['l2']
+# # print(l2CacheStats.dtype.names)
+# l2_hGETS = l2CacheStats['hGETS']
+# l2_hGETX = l2CacheStats['hGETX']
+# l2_mGETS = l2CacheStats['mGETS']
+# l2_mGETXIM = l2CacheStats['mGETXIM']
+# l2_mGETXSM = l2CacheStats['mGETXSM']
+
+# l2_all =  l2_hGETS + l2_hGETX + l2_mGETS + l2_mGETXIM + l2_mGETXSM
+# l2_all_avg = np.average(l2_all)
+# l2_misses =  l2_mGETS + l2_mGETXIM + l2_mGETXSM
+# l2_misses_avg = np.average(l2_misses)
+# l2_hit_rate_avg = (1. * (l2_all_avg - l2_misses_avg)) / l2_all_avg
+# print("L2 hit rate:", l2_hit_rate_avg)
 
 # NOTE: compute L3 miss rate
 l3CacheStats = stats['l3']
