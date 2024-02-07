@@ -77,9 +77,9 @@ void TimingCore::leave() {
     cRec.notifyLeave(curCycle);
 }
 
-void TimingCore::loadAndRecord(Address addr, Address pc, BOOL type) {
+void TimingCore::loadAndRecord(Address addr, Address pc, InsType type) {
     uint64_t startCycle = curCycle;
-    if (type) {
+    if (type == INS_GENERAL) {
         curCycle = l1d->load(addr, curCycle, pc);
     } else {
         // curCycle = l1s->sload(addr, curCycle, pc);
@@ -88,7 +88,7 @@ void TimingCore::loadAndRecord(Address addr, Address pc, BOOL type) {
     cRec.record(startCycle);
 }
 
-void TimingCore::storeAndRecord(Address addr, Address pc, BOOL type) {
+void TimingCore::storeAndRecord(Address addr, Address pc, InsType type) {
     uint64_t startCycle = curCycle;
     curCycle = l1d->store(addr, curCycle, pc);
     cRec.record(startCycle);
@@ -111,11 +111,11 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
     return {LoadAndRecordFunc, StoreAndRecordFunc, {}, {}, BblAndRecordFunc, BranchFunc, PredLoadAndRecordFunc, PredStoreAndRecordFunc, {}, {}, FPTR_ANALYSIS, {0}};
 }
 
-void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
+void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type) {
     static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, loadPC, type);
 }
 
-void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
+void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type) {
     static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, storePC, type);
 }
 
@@ -132,10 +132,10 @@ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInf
 }
 
 void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, predLoadPC, TRUE);
+    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, predLoadPC, INS_GENERAL);
 }
 
 void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, predStorePC, TRUE);
+    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, predStorePC, INS_GENERAL);
 }
 

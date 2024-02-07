@@ -31,6 +31,8 @@
 #include "g_std/g_string.h"
 #include "stats.h"
 
+enum InsType: uint8_t {INS_GENERAL, INS_INDEX, INS_COMPUTE};
+
 struct BblInfo {
     uint32_t instrs;
     uint32_t bytes;
@@ -41,8 +43,8 @@ struct BblInfo {
  * As an artifact of having a shared code cache, we need these to be the same for different core types.
  */
 struct InstrFuncPtrs {  // NOLINT(whitespace)
-    void (*loadPtr)(THREADID, ADDRINT, ADDRINT, BOOL);
-    void (*storePtr)(THREADID, ADDRINT, ADDRINT, BOOL);
+    void (*loadPtr)(THREADID, ADDRINT, ADDRINT, InsType);
+    void (*storePtr)(THREADID, ADDRINT, ADDRINT, InsType);
     void (*sloadPtr)(THREADID, ADDRINT, ADDRINT);
     void (*sstorePtr)(THREADID, ADDRINT, ADDRINT);
     void (*bblPtr)(THREADID, ADDRINT, BblInfo*);

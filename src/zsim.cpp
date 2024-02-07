@@ -102,6 +102,7 @@ BOOL simulateComputeAccesses {false};
 uint64_t numIns {0};
 uint64_t numIndexIns {0};
 uint64_t numComputeIns {0};
+InsType insType {INS_GENERAL};
 
 /* Per-process variables */
 
@@ -175,12 +176,12 @@ VOID RecordIndexIp(VOID* ip, THREADID tid);
 
 InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
+VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type) {
     
     fPtrs[tid].loadPtr(tid, loadPC, addr, type);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
+VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type) {
     fPtrs[tid].storePtr(tid, storePC, addr, type);
 }
 
@@ -234,12 +235,12 @@ void Join(uint32_t tid) {
     fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
 }
 
-VOID JoinAndLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
+VOID JoinAndLoadSingle(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type) {
     Join(tid);
     fPtrs[tid].loadPtr(tid, loadPC, addr, type);
 }
 
-VOID JoinAndStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
+VOID JoinAndStoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type) {
     Join(tid);
     fPtrs[tid].storePtr(tid, storePC, addr, type);
 }
@@ -286,7 +287,7 @@ VOID JoinAndPredSstoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
 
 // NOP variants: Do nothing
 // VOID NOPLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL type) {}
-VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL type) {}
+VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr, InsType type) {}
 VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
 VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
 VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT predPC, ADDRINT addr, BOOL pred) {}
@@ -678,7 +679,8 @@ VOID Instruction(INS ins) {
                     IARG_THREAD_ID, 
                     IARG_INST_PTR, 
                     IARG_MEMORYREAD_EA, 
-                    IARG_BOOL, !simulateIndexAccesses,
+                    // IARG_BOOL, !simulateIndexAccesses,
+                    IARG_UINT32, static_cast<UINT32>(insType),
                     IARG_END);
             } else {
                 INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, 
@@ -717,7 +719,8 @@ VOID Instruction(INS ins) {
                     IARG_THREAD_ID, 
                     IARG_INST_PTR, 
                     IARG_MEMORYWRITE_EA, 
-                    IARG_BOOL, !simulateIndexAccesses,
+                    IARG_UINT32, static_cast<UINT32>(insType),
+                    // IARG_BOOL, !simulateIndexAccesses,
                     IARG_END);
             } else {
                 INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, 
@@ -787,6 +790,8 @@ VOID Instruction(INS ins) {
 
 VOID Trace(TRACE trace, VOID *v) {
     if (simulateAccesses){
+        if (simulateComputeAccesses) insType = INS_COMPUTE;
+        if (simulateIndexAccesses) insType = INS_INDEX;
         // info("start in SpMV");
         if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
             // Visit every basic block in the trace

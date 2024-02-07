@@ -377,8 +377,8 @@ class OOOCore : public Core {
         Address storePCs[256];
         uint32_t loads;
         uint32_t stores;
-        BOOL loadTypes[256];
-        BOOL storeTypes[256];
+        InsType loadTypes[256];
+        InsType storeTypes[256];
 
         uint64_t lastStoreCommitCycle;
         uint64_t lastStoreAddrCommitCycle; //tracks last store addr uop, all loads queue behind it
@@ -459,8 +459,8 @@ class OOOCore : public Core {
         void cSimEnd();
 
     private:
-        inline void load(Address addr, Address pc, BOOL type);
-        inline void store(Address addr, Address pc, BOOL type);
+        inline void load(Address addr, Address pc, InsType type);
+        inline void store(Address addr, Address pc, InsType type);
 
         /* NOTE: Analysis routines cannot touch curCycle directly, must use
          * advance() for long jumps or insWindow.advancePos() for 1-cycle
@@ -481,8 +481,8 @@ class OOOCore : public Core {
 
         inline void bbl(Address bblAddr, BblInfo* bblInfo);
 
-        static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type);
-        static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type);
+        static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type);
+        static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type);
         static void PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);
         static void PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred);
         static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
