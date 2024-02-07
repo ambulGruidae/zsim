@@ -96,10 +96,12 @@ INT32 Usage() {
 /* Global Variables */
 
 GlobSimInfo* zinfo;
-bool simulateAccesses {false};
-bool simulateIndexAccesses {false};
+BOOL simulateAccesses {false};
+BOOL simulateIndexAccesses {false};
+BOOL simulateComputeAccesses {false};
 uint64_t numIns {0};
 uint64_t numIndexIns {0};
+uint64_t numComputeIns {0};
 
 /* Per-process variables */
 
@@ -418,6 +420,11 @@ VOID RecordIndexIp(VOID* ip, THREADID tid) {
         ++numIndexIns;
 }
 
+VOID RecordComputeIp(VOID* ip, THREADID tid) {
+    if (simulateComputeAccesses == true)
+        ++numComputeIns;
+}
+
 // Non-analysis pointer vars
 static const InstrFuncPtrs joinPtrs = {JoinAndLoadSingle, JoinAndStoreSingle, JoinAndSloadSingle, JoinAndSstoreSingle, JoinAndBasicBlock, JoinAndRecordBranch, JoinAndPredLoadSingle, JoinAndPredStoreSingle, JoinAndPredSloadSingle, JoinAndPredSstoreSingle, FPTR_JOIN};
 static const InstrFuncPtrs nopPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, nullptr, nullptr, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, nullptr, nullptr, FPTR_NOP};
@@ -584,23 +591,19 @@ static void PrintIp(THREADID tid, ADDRINT ip) {
 }
 #endif
 
-void startLogging() {
-    simulateAccesses = true;
-}
+void startLogging() { simulateAccesses = true; }
 
-void stopLogging() {
-    simulateAccesses = false;
-}
+void stopLogging() { simulateAccesses = false; }
 
-void startRecordIndexIp() {
-    simulateIndexAccesses = true;
-}
+void startRecordIndexIp() { simulateIndexAccesses = true; }
 
-void stopRecordIndexIp() {
-    simulateIndexAccesses = false;
-}
+void stopRecordIndexIp() { simulateIndexAccesses = false; }
 
-void nopRecord() {}
+void nopRecord() { /*NOP*/ }
+
+void startRecordComputeIp() { simulateComputeAccesses = true; }
+
+void stopRecordComputeIp() { simulateComputeAccesses = false; }
 
 void RoutineCallback(RTN rtn, void* v) {
     std::string rtnName = RTN_Name(rtn);
@@ -625,6 +628,13 @@ void RoutineCallback(RTN rtn, void* v) {
     if (rtnName.find("PIN_Nop_End") != std::string::npos) {
         RTN_Replace(rtn, AFUNPTR(nopRecord));
     }   
+    if (rtnName.find("PIN_Compute_Start") != std::string::npos) {
+        info("Instrumenting PIN_Compute_Start")
+        RTN_Replace(rtn, AFUNPTR(startRecordComputeIp));
+    }   
+    if (rtnName.find("PIN_Compute_End") != std::string::npos) {
+        RTN_Replace(rtn, AFUNPTR(stopRecordComputeIp));
+    }   
 }
 
 VOID Instruction(INS ins) {
@@ -645,6 +655,12 @@ VOID Instruction(INS ins) {
 //        AFUNPTR PredSstoreFuncPtr = (AFUNPTR) IndirectPredSstoreSingle;
         INS_InsertPredicatedCall(
             ins, IPOINT_BEFORE, (AFUNPTR)RecordIndexIp, 
+            IARG_INST_PTR,
+            IARG_THREAD_ID,
+            IARG_END);
+
+        INS_InsertPredicatedCall(
+            ins, IPOINT_BEFORE, (AFUNPTR)RecordComputeIp, 
             IARG_INST_PTR,
             IARG_THREAD_ID,
             IARG_END);
@@ -1259,6 +1275,7 @@ VOID AfterForkInChild(THREADID tid, const CONTEXT* ctxt, VOID * arg) {
 VOID Fini(int code, VOID * v) {
     info("Finished, code %d", code);
     info("IndexInsNum/InsNum: %ld/%ld=%lf", numIndexIns, numIns, ((double)numIndexIns/numIns));
+    info("ComputeInsNum/InsNum: %ld/%ld=%lf", numComputeIns, numIns, ((double)numComputeIns/numIns));
     //NOTE: In fini, it appears that info() and writes to stdout in general won't work; warn() and stderr still work fine.
     SimEnd();
 }
