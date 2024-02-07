@@ -133,12 +133,14 @@ void OOOCore::contextSwitch(int32_t gid) {
 
 InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, {}, {}, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, {}, {}, FPTR_ANALYSIS, {0}};}
 
-inline void OOOCore::load(Address addr, Address pc) {
+inline void OOOCore::load(Address addr, Address pc, BOOL type) {
+    loadTypes[loads] = type;
     loadPCs[loads] = pc;
     loadAddrs[loads++] = addr;
 }
 
-void OOOCore::store(Address addr, Address pc) {
+void OOOCore::store(Address addr, Address pc, BOOL type) {
+    storeTypes[stores] = type;
     storePCs[stores] = pc;
     storeAddrs[stores++] = addr;
 }
@@ -272,12 +274,15 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                     // Wait for all previous store addresses to be resolved
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
+                    BOOL type = loadTypes[loadIdx];
                     Address pc = loadPCs[loadIdx];
                     Address addr = loadAddrs[loadIdx++];
                     uint64_t reqSatisfiedCycle = dispatchCycle;
                     if (addr != ((Address)-1L)) {
-                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle, pc) + L1D_LAT;
-                        cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                        if (type) {
+                            reqSatisfiedCycle = l1d->load(addr, dispatchCycle, pc) + L1D_LAT;
+                            cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                        }
                     }
 
                     // Enforce st-ld forwarding
@@ -312,10 +317,19 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                     // Wait for all previous store addresses to be resolved (not just ours :))
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
+                    BOOL type = storeTypes[storeIdx];
                     Address pc = storePCs[storeIdx];
                     Address addr = storeAddrs[storeIdx++];
-                    uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle, pc) + L1D_LAT;
-                    cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                    uint64_t reqSatisfiedCycle = dispatchCycle;
+                    if (addr != ((Address)-1L)) {
+                        if (type) {
+                            reqSatisfiedCycle = l1d->store(addr, dispatchCycle, pc) + L1D_LAT;
+                            cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                        }
+                        else {
+                            l1d->store(addr, dispatchCycle, pc);
+                        }
+                    }
 
                     // Fill the forwarding table
                     fwdArray[(addr>>2) & (FWD_ENTRIES-1)].set(addr, reqSatisfiedCycle);
@@ -494,22 +508,22 @@ void OOOCore::advance(uint64_t targetCycle) {
 // Pin interface code
 
 void OOOCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, BOOL type) {
-    static_cast<OOOCore*>(cores[tid])->load(addr, loadPC);
+    static_cast<OOOCore*>(cores[tid])->load(addr, loadPC, type);
 }
 
 void OOOCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, BOOL type) {
-    static_cast<OOOCore*>(cores[tid])->store(addr, storePC);
+    static_cast<OOOCore*>(cores[tid])->store(addr, storePC, type);
 }
 
 void OOOCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-    if (pred) core->load(addr, predLoadPC);
+    if (pred) core->load(addr, predLoadPC, TRUE);
     else core->predFalseLoad();
 }
 
 void OOOCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {
     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-    if (pred) core->store(addr, predStorePC);
+    if (pred) core->store(addr, predStorePC, TRUE);
     else core->predFalseStore();
 }
 

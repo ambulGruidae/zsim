@@ -377,6 +377,8 @@ class OOOCore : public Core {
         Address storePCs[256];
         uint32_t loads;
         uint32_t stores;
+        BOOL loadTypes[256];
+        BOOL storeTypes[256];
 
         uint64_t lastStoreCommitCycle;
         uint64_t lastStoreAddrCommitCycle; //tracks last store addr uop, all loads queue behind it
@@ -457,8 +459,8 @@ class OOOCore : public Core {
         void cSimEnd();
 
     private:
-        inline void load(Address addr, Address pc);
-        inline void store(Address addr, Address pc);
+        inline void load(Address addr, Address pc, BOOL type);
+        inline void store(Address addr, Address pc, BOOL type);
 
         /* NOTE: Analysis routines cannot touch curCycle directly, must use
          * advance() for long jumps or insWindow.advancePos() for 1-cycle
