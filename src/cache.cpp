@@ -70,6 +70,7 @@ uint64_t Cache::access(MemReq& req) {
     if (likely(!skipAccess)) {
         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
         int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
+        // info("Cache lineId: %d", lineId);
         respCycle += accLat;
 
         if (lineId == -1 && cc->shouldAllocate(req)) {

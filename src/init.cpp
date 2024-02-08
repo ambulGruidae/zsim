@@ -738,7 +738,7 @@ static void InitSystem(Config& config) {
                         core = tcore;
                     } else {
                         assert(type == "OOO");
-                        OOOCore* ocore = new (&oooCores[j]) OOOCore(ic, dc, name);
+                        OOOCore* ocore = new (&oooCores[j]) OOOCore(ic, dc, sc, name);
                         zinfo->eventRecorders[coreIdx] = ocore->getEventRecorder();
                         zinfo->eventRecorders[coreIdx]->setSourceId(coreIdx);
                         core = ocore;

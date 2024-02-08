@@ -51,11 +51,12 @@
 #define DISPATCH_STAGE 13  // RAT + ROB + RS, each is easily 2 cycles
 
 #define L1D_LAT 4  // fixed, and FilterCache does not include L1 delay
+#define L1S_LAT 3  // fixed, and FilterCache does not include L1 delay
 #define FETCH_BYTES_PER_CYCLE 16
 #define ISSUES_PER_CYCLE 4
 #define RF_READS_PER_CYCLE 3
 
-OOOCore::OOOCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), cRec(0, _name) {
+OOOCore::OOOCore(FilterCache* _l1i, FilterCache* _l1d, FilterCache* _l1s, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), l1s(_l1s), cRec(0, _name) {
     decodeCycle = DECODE_STAGE;  // allow subtracting from it
     curCycle = 0;
     phaseEndCycle = zinfo->phaseLength;
@@ -127,6 +128,7 @@ void OOOCore::contextSwitch(int32_t gid) {
         // Invalidate virtually-addressed filter caches
         l1i->contextSwitch();
         l1d->contextSwitch();
+        l1s->contextSwitch();
     }
 }
 
@@ -284,8 +286,9 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                         if (type == INS_GENERAL) {
                             reqSatisfiedCycle = l1d->load(addr, dispatchCycle, pc) + L1D_LAT;
                             cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
-                        } else {
-                            // l1d->load(addr, dispatchCycle, pc);
+                        } else if (type == INS_COMPUTE) {
+                            reqSatisfiedCycle = l1s->load(addr, dispatchCycle, pc);
+                            cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
                         }
 
                     }
@@ -330,9 +333,13 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                         if (type == INS_GENERAL) {
                             reqSatisfiedCycle = l1d->store(addr, dispatchCycle, pc) + L1D_LAT;
                             cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
-                        }
-                        else {
+                        } else if (type == INS_COMPUTE) {
+                            reqSatisfiedCycle = l1s->store(addr, dispatchCycle, pc);
+                            cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
                             // l1d->store(addr, dispatchCycle, pc);
+                        } else if (type == INS_INDEX) {
+                            reqSatisfiedCycle = l1s->store(addr, dispatchCycle, pc);
+                            // cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
                         }
                     }
 

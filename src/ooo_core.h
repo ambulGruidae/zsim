@@ -362,6 +362,7 @@ class OOOCore : public Core {
     private:
         FilterCache* l1i;
         FilterCache* l1d;
+        FilterCache* l1s;
 
         uint64_t phaseEndCycle; //next stopping point
 
@@ -438,7 +439,7 @@ class OOOCore : public Core {
         OOOCoreRecorder cRec;
 
     public:
-        OOOCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name);
+        OOOCore(FilterCache* _l1i, FilterCache* _l1d, FilterCache* _l1s, g_string& _name);
 
         void initStats(AggregateStat* parentStat);
 
