@@ -337,10 +337,10 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                             reqSatisfiedCycle = l1s->store(addr, dispatchCycle, pc);
                             cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
                             // l1d->store(addr, dispatchCycle, pc);
-                        } else if (type == INS_INDEX) {
+                        } /*else if (type == INS_INDEX) {
                             reqSatisfiedCycle = l1s->store(addr, dispatchCycle, pc);
-                            // cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
-                        }
+                            cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                        }*/
                     }
 
                     // Fill the forwarding table
