@@ -1,4 +1,5 @@
 import h5py
+import csv
 import numpy as np
 
 f = h5py.File('zsim.h5', 'r')
@@ -18,6 +19,7 @@ totalCycles_avg = np.average(totalCycles)
 
 ipc_avg = (1. * totalInstrs_avg) / totalCycles_avg
 print("Cycles:", format(totalCycles_avg,","))
+print("Instr.:", format(totalInstrs_avg,","))
 print("IPC:", ipc_avg)
 
 
@@ -106,3 +108,13 @@ l3_misses =  l3_mGETS + l3_mGETXIM + l3_mGETXSM
 l3_misses_avg = np.average(l3_misses)
 l3_hit_rate_avg = (1. * (l3_all_avg - l3_misses_avg)) / l3_all_avg
 print("L3 hit rate:", l3_hit_rate_avg)
+
+# NOTE: write to file
+app_name = input("Enter the application name: ")
+isWrite = input("Do you want to write to the file? (y/n): ")
+if isWrite == "y":
+    path = "../ligra.csv"
+    with open(path, 'a+') as f:
+        writer = csv.writer(f)
+        datarow = [app_name, format(totalCycles_avg,","), format(totalInstrs_avg,","), ipc_avg, l1d_hit_rate_avg, l1i_hit_rate_avg, l1s_hit_rate_avg, l2_hit_rate_avg, l3_hit_rate_avg]
+        writer.writerow(datarow)
