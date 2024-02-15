@@ -21,6 +21,7 @@
 #include <limits>
 #include <algorithm>
 #include <iomanip>
+#include <numeric>
 #include "feedback_repl.h"
 
 // #define info(...) do { printf(__VA_ARGS__); } while(0)
