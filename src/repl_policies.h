@@ -492,7 +492,7 @@ class DRRIPReplPolicy : public ReplPolicy {
         template <typename C> inline uint32_t rank(const MemReq* req, C cands) {
             // update the DRRIP repl states upon a miss
             bool flag = false;  //the states are defined in memory_hierarchy.h
-            int cur_id;
+            int cur_id = 0;
             while (!flag) {
                 for (auto ci = cands.begin(); ci != cands.end(); ci.inc()) {
                     int id = *ci;

@@ -133,7 +133,7 @@ void OOOCore::contextSwitch(int32_t gid) {
 }
 
 
-InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, {}, {}, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, {}, {}, FPTR_ANALYSIS, {0}};}
+InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, nullptr, nullptr, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc,  nullptr, nullptr, FPTR_ANALYSIS, {0}};}
 
 inline void OOOCore::load(Address addr, Address pc, InsType type) {
     loadTypes[loads] = type;

@@ -221,7 +221,7 @@ void SparseTagArray::print() {
     }
 }
 
-SparseDataArray::SparseDataArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf) {
+SparseDataArray::SparseDataArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf) : rp(_rp), hf(_hf), numLines(_numLines), assoc(_assoc) {
     mtagArray = gm_calloc<int32_t>(numLines);
     tagPtrArray = gm_calloc<int32_t>(numLines);
     approximateArray = gm_calloc<bool>(numLines);

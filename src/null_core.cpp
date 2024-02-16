@@ -59,7 +59,7 @@ void NullCore::join() {
 //Static class functions: Function pointers and trampolines
 
 InstrFuncPtrs NullCore::GetFuncPtrs() {
-    return {LoadFunc, StoreFunc, {}, {}, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, {}, {}, FPTR_ANALYSIS, {0}};
+    return {LoadFunc, StoreFunc, nullptr, nullptr, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, nullptr, nullptr, FPTR_ANALYSIS, {0}};
 }
 
 void NullCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type) {}

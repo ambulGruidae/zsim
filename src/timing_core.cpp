@@ -108,7 +108,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
 
 
 InstrFuncPtrs TimingCore::GetFuncPtrs() {
-    return {LoadAndRecordFunc, StoreAndRecordFunc, {}, {}, BblAndRecordFunc, BranchFunc, PredLoadAndRecordFunc, PredStoreAndRecordFunc, {}, {}, FPTR_ANALYSIS, {0}};
+    return {LoadAndRecordFunc, StoreAndRecordFunc, nullptr, nullptr, BblAndRecordFunc, BranchFunc, PredLoadAndRecordFunc, PredStoreAndRecordFunc, nullptr, nullptr, FPTR_ANALYSIS, {0}};
 }
 
 void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type) {
