@@ -31,7 +31,7 @@
 #include "g_std/g_string.h"
 #include "stats.h"
 
-enum InsType: uint8_t {INS_GENERAL, INS_INDEX, INS_COMPUTE};
+enum InsType: uint8_t {INS_GENERAL, INS_INDEX, INS_COMPUTE, INS_ACCUM};
 
 struct BblInfo {
     uint32_t instrs;

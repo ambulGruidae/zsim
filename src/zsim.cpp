@@ -99,6 +99,7 @@ GlobSimInfo* zinfo;
 BOOL simulateAccesses {false};
 BOOL simulateIndexAccesses {false};
 BOOL simulateComputeAccesses {false};
+BOOL simulateAccumAccesses {false};
 uint64_t numIns {0};
 uint64_t numIndexIns {0};
 uint64_t numComputeIns {0};
@@ -606,6 +607,10 @@ void startRecordComputeIp() { simulateComputeAccesses = true; }
 
 void stopRecordComputeIp() { simulateComputeAccesses = false; }
 
+void startRecordAccumIp() { simulateAccumAccesses = true; }
+
+void stopRecordAccumIp() { simulateAccumAccesses = false; }
+
 void RoutineCallback(RTN rtn, void* v) {
     std::string rtnName = RTN_Name(rtn);
     if (rtnName.find("PIN_Sim_Start") != std::string::npos) {
@@ -635,6 +640,13 @@ void RoutineCallback(RTN rtn, void* v) {
     }   
     if (rtnName.find("PIN_Compute_End") != std::string::npos) {
         RTN_Replace(rtn, AFUNPTR(stopRecordComputeIp));
+    }   
+    if (rtnName.find("PIN_Accum_Start") != std::string::npos) {
+        info("Instrumenting PIN_Accum_Start")
+        RTN_Replace(rtn, AFUNPTR(startRecordAccumIp));
+    }   
+    if (rtnName.find("PIN_Accum_End") != std::string::npos) {
+        RTN_Replace(rtn, AFUNPTR(stopRecordAccumIp));
     }   
 }
 
@@ -790,7 +802,8 @@ VOID Instruction(INS ins) {
 
 VOID Trace(TRACE trace, VOID *v) {
     if (simulateAccesses){
-        if (simulateComputeAccesses) insType = INS_COMPUTE;
+        if (simulateComputeAccesses && !simulateAccumAccesses) insType = INS_COMPUTE;
+        if (simulateComputeAccesses && simulateAccumAccesses) insType = INS_ACCUM;
         if (simulateIndexAccesses) insType = INS_INDEX;
         // info("start in SpMV");
         if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
