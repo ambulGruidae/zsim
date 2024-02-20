@@ -47,7 +47,7 @@ struct InstrFuncPtrs {  // NOLINT(whitespace)
     void (*storePtr)(THREADID, ADDRINT, ADDRINT, InsType);
     void (*sloadPtr)(THREADID, ADDRINT, ADDRINT);
     void (*sstorePtr)(THREADID, ADDRINT, ADDRINT);
-    void (*bblPtr)(THREADID, ADDRINT, BblInfo*);
+    void (*bblPtr)(THREADID, ADDRINT, BblInfo*, InsType);
     void (*branchPtr)(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT);
     // Same as load/store functions, but last arg indicated whether op is executing
     void (*predLoadPtr)(THREADID, ADDRINT, ADDRINT, BOOL);

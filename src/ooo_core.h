@@ -480,13 +480,13 @@ class OOOCore : public Core {
 
         inline void branch(Address pc, bool taken, Address takenNpc, Address notTakenNpc);
 
-        inline void bbl(Address bblAddr, BblInfo* bblInfo);
+        inline void bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType);
 
         static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type);
         static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type);
         static void PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);
         static void PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred);
-        static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
+        static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type);
         static void BranchFunc(THREADID tid, ADDRINT pc, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc);
 } ATTR_LINE_ALIGNED;  // Take up an int number of cache lines
 

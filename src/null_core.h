@@ -55,7 +55,7 @@ class NullCore : public Core {
 
         static void LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type);
         static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type);
-        static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
+        static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type);
         static void PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);
         static void PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred);
 

@@ -67,7 +67,7 @@ void NullCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType ty
 void NullCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {}
 void NullCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred) {}
 
-void NullCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+void NullCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
     NullCore* core = static_cast<NullCore*>(cores[tid]);
     core->bbl(bblInfo);
 

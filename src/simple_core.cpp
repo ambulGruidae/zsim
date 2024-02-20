@@ -146,7 +146,7 @@ void SimpleCore::PredSstoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
     if (pred) static_cast<SimpleCore*>(cores[tid])->sstore(addr, 0);
 }
 
-void SimpleCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+void SimpleCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
     SimpleCore* core = static_cast<SimpleCore*>(cores[tid]);
     core->bbl(bblAddr, bblInfo);
 

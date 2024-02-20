@@ -168,7 +168,7 @@ void OOOCore::branch(Address pc, bool taken, Address takenNpc, Address notTakenN
     branchNotTakenNpc = notTakenNpc;
 }
 
-inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType) {
     if (!prevBbl) {
         // This is the 1st BBL since scheduled, nothing to simulate
         prevBbl = bblInfo;
@@ -189,6 +189,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
     uint32_t prevDecCycle = 0;
     uint64_t lastCommitCycle = 0;  // used to find misprediction penalty
 
+    uint32_t cnt0 = 0, cnt1 = 0;
     // Run dispatch/IW
     for (uint32_t i = 0; i < bbl->uops; i++) {
         DynUop* uop = &(bbl->uop[i]);
@@ -261,7 +262,17 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
         // NOTE: Ever-so-slightly faster than if-else if-else if-else
         switch (uop->type) {
             case UOP_GENERAL:
-                commitCycle = dispatchCycle + uop->lat;
+                if (bblType == INS_GENERAL || bblType == INS_COMPUTE || bblType == INS_INDEX) {
+                    commitCycle = dispatchCycle + uop->lat;
+                    cnt0++;
+                    // info("commitCycle0 %ld %ld", dispatchCycle, commitCycle);
+                    // assert(uop->lat == 1);  // not implemented
+                } else {
+                    commitCycle = dispatchCycle + 1;
+                    cnt1++;
+                    // info("commitCycle1 %ld %ld", dispatchCycle, commitCycle);
+                }
+
                 break;
 
             case UOP_LOAD:
@@ -378,6 +389,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
 
         //info("0x%lx %3d [%3d %3d] -> [%3d %3d]  %8ld %8ld %8ld %8ld", bbl->addr, i, uop->rs[0], uop->rs[1], uop->rd[0], uop->rd[1], decCycle, c3, dispatchCycle, commitCycle);
     }
+    // info("cnt %d %d", cnt0, cnt1);
 
     instrs += bblInstrs;
     uops += bbl->uops;
@@ -539,9 +551,9 @@ void OOOCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOO
     else core->predFalseStore();
 }
 
-void OOOCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+void OOOCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-    core->bbl(bblAddr, bblInfo);
+    core->bbl(bblAddr, bblInfo, type);
 
     while (core->curCycle > core->phaseEndCycle) {
         core->phaseEndCycle += zinfo->phaseLength;

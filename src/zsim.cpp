@@ -194,8 +194,8 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectSstoreSingle(THREADID tid, ADDRINT storePC, 
     fPtrs[tid].sstorePtr(tid, storePC, addr);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-    fPtrs[tid].bblPtr(tid, bblAddr, bblInfo);
+VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType bblType) {
+    fPtrs[tid].bblPtr(tid, bblAddr, bblInfo, bblType);
 }
 
 VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {
@@ -256,9 +256,9 @@ VOID JoinAndSstoreSingle(THREADID tid, ADDRINT storePC, ADDRINT addr) {
     fPtrs[tid].sstorePtr(tid, storePC, addr);
 }
 
-VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType bblType) {
     Join(tid);
-    fPtrs[tid].bblPtr(tid, bblAddr, bblInfo);
+    fPtrs[tid].bblPtr(tid, bblAddr, bblInfo, bblType);
 }
 
 VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {
@@ -289,12 +289,12 @@ VOID JoinAndPredSstoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
 // NOP variants: Do nothing
 // VOID NOPLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL type) {}
 VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr, InsType type) {}
-VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
+VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {}
 VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
 VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT predPC, ADDRINT addr, BOOL pred) {}
 
 // FF is basically NOP except for basic blocks
-VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
     if (unlikely(!procTreeNode->isInFastForward())) {
         SimThreadStart(tid);
     }
@@ -387,7 +387,7 @@ VOID FFIAdvance() {
     }
 }
 
-VOID FFIBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+VOID FFIBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
     ffiInstrsDone += bblInfo->instrs;
     if (unlikely(ffiInstrsDone >= ffiInstrsLimit)) {
         FFIAdvance();
@@ -403,13 +403,13 @@ VOID FFIBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
 }
 
 // One-off, called after we go from NFF to FF
-VOID FFIEntryBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+VOID FFIEntryBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
     ffiInstrsDone += *ffiFFStartInstrs - *ffiPrevFFStartInstrs; //add all instructions executed in the NFF phase
     FFIAdvance();
     assert(ffiNFF);
     ffiNFF = false;
     fPtrs[tid] = GetFFPtrs();
-    FFIBasicBlock(tid, bblAddr, bblInfo);
+    FFIBasicBlock(tid, bblAddr, bblInfo, type);
 }
 
 VOID RecordIp(VOID* ip, THREADID tid) {
@@ -804,18 +804,22 @@ VOID Trace(TRACE trace, VOID *v) {
     if (simulateAccesses){
         if (simulateComputeAccesses && !simulateAccumAccesses) insType = INS_COMPUTE;
         if (simulateComputeAccesses && simulateAccumAccesses) insType = INS_ACCUM;
-        if (simulateIndexAccesses) insType = INS_INDEX;
+        if (simulateIndexAccesses && !simulateAccumAccesses) insType = INS_INDEX;
+        if (simulateIndexAccesses && simulateAccumAccesses) insType = INS_ACCUM;
         // info("start in SpMV");
         if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
+            info("Instrumenting bbl");
             // Visit every basic block in the trace
             for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
                 BblInfo* bblInfo = Decoder::decodeBbl(bbl, zinfo->oooDecode);
+                info("instrs: %d, bytes: %d, ooobbl_uops: %d, uop0_type: %d ", bblInfo->instrs, bblInfo->bytes, bblInfo->oooBbl[0].uops, bblInfo->oooBbl[0].uop[0].type);
                 BBL_InsertCall(bbl, IPOINT_BEFORE /*could do IPOINT_ANYWHERE if we redid load and store simulation in OOO*/, 
                     (AFUNPTR)IndirectBasicBlock, 
                     IARG_FAST_ANALYSIS_CALL,
                     IARG_THREAD_ID, 
                     IARG_ADDRINT, BBL_Address(bbl), 
                     IARG_PTR, bblInfo, 
+                    IARG_UINT32, static_cast<UINT32>(insType),
                     IARG_END);
             }
         }

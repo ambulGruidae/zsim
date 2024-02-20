@@ -70,7 +70,7 @@ class SimpleCore : public Core {
         static void StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type);
         static void SloadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr);
         static void SstoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr);
-        static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
+        static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type);
         static void PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred);
         static void PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOOL pred);
         static void PredSloadFunc(THREADID tid, ADDRINT addr, BOOL pred);

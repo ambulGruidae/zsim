@@ -94,7 +94,7 @@ void TimingCore::storeAndRecord(Address addr, Address pc, InsType type) {
     cRec.record(startCycle);
 }
 
-void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
+void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo, InsType type) {
     instrs += bblInfo->instrs;
     curCycle += bblInfo->instrs;
 
@@ -119,9 +119,9 @@ void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT storePC, ADDRINT addr,
     static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, storePC, type);
 }
 
-void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
     TimingCore* core = static_cast<TimingCore*>(cores[tid]);
-    core->bblAndRecord(bblAddr, bblInfo);
+    core->bblAndRecord(bblAddr, bblInfo, type);
 
     while (core->curCycle > core->phaseEndCycle) {
         core->phaseEndCycle += zinfo->phaseLength;
