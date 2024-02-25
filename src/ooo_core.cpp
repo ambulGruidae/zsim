@@ -189,7 +189,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType) {
     uint32_t prevDecCycle = 0;
     uint64_t lastCommitCycle = 0;  // used to find misprediction penalty
 
-    uint32_t cnt0 = 0, cnt1 = 0;
+    // uint32_t cnt0 = 0, cnt1 = 0;
     // Run dispatch/IW
     for (uint32_t i = 0; i < bbl->uops; i++) {
         DynUop* uop = &(bbl->uop[i]);
@@ -262,15 +262,10 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType) {
         // NOTE: Ever-so-slightly faster than if-else if-else if-else
         switch (uop->type) {
             case UOP_GENERAL:
-                if (bblType == INS_GENERAL || bblType == INS_COMPUTE || bblType == INS_INDEX) {
+                if (bblType == INS_GENERAL || bblType == INS_COMPUTE) {
                     commitCycle = dispatchCycle + uop->lat;
-                    cnt0++;
-                    // info("commitCycle0 %ld %ld", dispatchCycle, commitCycle);
-                    // assert(uop->lat == 1);  // not implemented
                 } else {
-                    commitCycle = dispatchCycle + 1;
-                    cnt1++;
-                    // info("commitCycle1 %ld %ld", dispatchCycle, commitCycle);
+                    commitCycle = dispatchCycle;
                 }
 
                 break;
@@ -301,7 +296,6 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType) {
                             reqSatisfiedCycle = l1s->load(addr, dispatchCycle, pc);
                             cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
                         }
-
                     }
 
                     // Enforce st-ld forwarding
@@ -347,7 +341,6 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType) {
                         } else if (type == INS_COMPUTE) {
                             reqSatisfiedCycle = l1s->store(addr, dispatchCycle, pc);
                             cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
-                            // l1d->store(addr, dispatchCycle, pc);
                         } /*else if (type == INS_INDEX) {
                             reqSatisfiedCycle = l1s->store(addr, dispatchCycle, pc);
                             cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
@@ -372,10 +365,8 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType) {
             default:
                 assert((UopType) uop->type == UOP_FENCE);
                 commitCycle = dispatchCycle + uop->lat;
-                // info("%d %ld %ld", uop->lat, lastStoreAddrCommitCycle, lastStoreCommitCycle);
                 // force future load serialization
                 lastStoreAddrCommitCycle = MAX(commitCycle, MAX(lastStoreAddrCommitCycle, lastStoreCommitCycle + uop->lat));
-                // info("%d %ld %ld X", uop->lat, lastStoreAddrCommitCycle, lastStoreCommitCycle);
         }
 
         // Mark retire at ROB
@@ -389,7 +380,6 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo, InsType bblType) {
 
         //info("0x%lx %3d [%3d %3d] -> [%3d %3d]  %8ld %8ld %8ld %8ld", bbl->addr, i, uop->rs[0], uop->rs[1], uop->rd[0], uop->rd[1], decCycle, c3, dispatchCycle, commitCycle);
     }
-    // info("cnt %d %d", cnt0, cnt1);
 
     instrs += bblInstrs;
     uops += bbl->uops;
@@ -532,11 +522,15 @@ void OOOCore::advance(uint64_t targetCycle) {
 // Pin interface code
 
 void OOOCore::LoadFunc(THREADID tid, ADDRINT loadPC, ADDRINT addr, InsType type) {
-    static_cast<OOOCore*>(cores[tid])->load(addr, loadPC, type);
+    if (type == INS_GENERAL || type == INS_COMPUTE) {
+        static_cast<OOOCore*>(cores[tid])->load(addr, loadPC, type);
+    }
 }
 
 void OOOCore::StoreFunc(THREADID tid, ADDRINT storePC, ADDRINT addr, InsType type) {
-    static_cast<OOOCore*>(cores[tid])->store(addr, storePC, type);
+    if (type == INS_GENERAL || type == INS_COMPUTE) {
+        static_cast<OOOCore*>(cores[tid])->store(addr, storePC, type);
+    }
 }
 
 void OOOCore::PredLoadFunc(THREADID tid, ADDRINT predLoadPC, ADDRINT addr, BOOL pred) {
@@ -552,22 +546,24 @@ void OOOCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOO
 }
 
 void OOOCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
-    OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-    core->bbl(bblAddr, bblInfo, type);
+    if (type == INS_GENERAL || type == INS_COMPUTE) {
+        OOOCore* core = static_cast<OOOCore*>(cores[tid]);
+        core->bbl(bblAddr, bblInfo, type);
 
-    while (core->curCycle > core->phaseEndCycle) {
-        core->phaseEndCycle += zinfo->phaseLength;
+        while (core->curCycle > core->phaseEndCycle) {
+            core->phaseEndCycle += zinfo->phaseLength;
 
-        uint32_t cid = getCid(tid);
-        // NOTE: TakeBarrier may take ownership of the core, and so it will be used by some other thread. If TakeBarrier context-switches us,
-        // the *only* safe option is to return inmmediately after we detect this, or we can race and corrupt core state. However, the information
-        // here is insufficient to do that, so we could wind up double-counting phases.
-        uint32_t newCid = TakeBarrier(tid, cid);
-        // NOTE: Upon further observation, we cannot race if newCid == cid, so this code should be enough.
-        // It may happen that we had an intervening context-switch and we are now back to the same core.
-        // This is fine, since the loop looks at core values directly and there are no locals involved,
-        // so we should just advance as needed and move on.
-        if (newCid != cid) break;  /*context-switch, we do not own this context anymore*/
+            uint32_t cid = getCid(tid);
+            // NOTE: TakeBarrier may take ownership of the core, and so it will be used by some other thread. If TakeBarrier context-switches us,
+            // the *only* safe option is to return inmmediately after we detect this, or we can race and corrupt core state. However, the information
+            // here is insufficient to do that, so we could wind up double-counting phases.
+            uint32_t newCid = TakeBarrier(tid, cid);
+            // NOTE: Upon further observation, we cannot race if newCid == cid, so this code should be enough.
+            // It may happen that we had an intervening context-switch and we are now back to the same core.
+            // This is fine, since the loop looks at core values directly and there are no locals involved,
+            // so we should just advance as needed and move on.
+            if (newCid != cid) break;  /*context-switch, we do not own this context anymore*/
+        }   
     }
 }
 

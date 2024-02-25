@@ -628,21 +628,21 @@ void RoutineCallback(RTN rtn, void* v) {
         RTN_Replace(rtn, AFUNPTR(stopRecordIndexIp));
     }   
     if (rtnName.find("PIN_Nop_Start") != std::string::npos) {
-        info("Instrumenting PIN_Nop_Start")
+        // info("Instrumenting PIN_Nop_Start")
         RTN_Replace(rtn, AFUNPTR(nopRecord));
     }   
     if (rtnName.find("PIN_Nop_End") != std::string::npos) {
         RTN_Replace(rtn, AFUNPTR(nopRecord));
     }   
     if (rtnName.find("PIN_Compute_Start") != std::string::npos) {
-        info("Instrumenting PIN_Compute_Start")
+        // info("Instrumenting PIN_Compute_Start")
         RTN_Replace(rtn, AFUNPTR(startRecordComputeIp));
     }   
     if (rtnName.find("PIN_Compute_End") != std::string::npos) {
         RTN_Replace(rtn, AFUNPTR(stopRecordComputeIp));
     }   
     if (rtnName.find("PIN_Accum_Start") != std::string::npos) {
-        info("Instrumenting PIN_Accum_Start")
+        // info("Instrumenting PIN_Accum_Start")
         RTN_Replace(rtn, AFUNPTR(startRecordAccumIp));
     }   
     if (rtnName.find("PIN_Accum_End") != std::string::npos) {
@@ -803,16 +803,14 @@ VOID Instruction(INS ins) {
 VOID Trace(TRACE trace, VOID *v) {
     if (simulateAccesses){
         if (simulateComputeAccesses && !simulateAccumAccesses) insType = INS_COMPUTE;
-        if (simulateComputeAccesses && simulateAccumAccesses) insType = INS_ACCUM;
         if (simulateIndexAccesses && !simulateAccumAccesses) insType = INS_INDEX;
-        if (simulateIndexAccesses && simulateAccumAccesses) insType = INS_ACCUM;
-        // info("start in SpMV");
+        if ((simulateComputeAccesses ^ simulateIndexAccesses) && simulateAccumAccesses){
+            insType = INS_ACCUM;
+        }
         if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
-            info("Instrumenting bbl");
             // Visit every basic block in the trace
             for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
                 BblInfo* bblInfo = Decoder::decodeBbl(bbl, zinfo->oooDecode);
-                info("instrs: %d, bytes: %d, ooobbl_uops: %d, uop0_type: %d ", bblInfo->instrs, bblInfo->bytes, bblInfo->oooBbl[0].uops, bblInfo->oooBbl[0].uop[0].type);
                 BBL_InsertCall(bbl, IPOINT_BEFORE /*could do IPOINT_ANYWHERE if we redid load and store simulation in OOO*/, 
                     (AFUNPTR)IndirectBasicBlock, 
                     IARG_FAST_ANALYSIS_CALL,

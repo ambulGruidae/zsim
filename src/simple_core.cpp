@@ -53,7 +53,7 @@ void SimpleCore::load(Address addr, Address pc, InsType type) {
         curCycle = l1d->load(addr, curCycle, pc);
     } else {
         curCycle = l1s->load(addr, curCycle, pc);
-        curCycle = _curCycle + 1;
+        curCycle = _curCycle;
     }
     
 }
@@ -62,9 +62,10 @@ void SimpleCore::store(Address addr, Address pc, InsType type) {
     uint64_t _curCycle = curCycle;
     if (type == INS_GENERAL){
         curCycle = l1d->store(addr, curCycle, pc);
+        // assert(curCycle > _curCycle);
     } else {
         curCycle = l1s->store(addr, curCycle, pc);
-        curCycle = _curCycle + 1;
+        curCycle = _curCycle;
     }
 }
 
