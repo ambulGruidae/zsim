@@ -111,7 +111,20 @@ l3_misses_avg = np.average(l3_misses)
 l3_hit_rate_avg = (1. * (l3_all_avg - l3_misses_avg)) / l3_all_avg
 print("L3 hit rate:", l3_hit_rate_avg)
 
-
+memStats = stats['mem']
+# print(memStats.dtype.names)
+mem_rd = memStats['rd']
+mem_rd_avg = np.average(mem_rd)
+mem_wr = memStats['wr']
+mem_wr_avg = np.average(mem_wr)
+mem_rdlat = memStats['rdlat']
+mem_rdlat_avg = np.average(mem_rdlat)
+mem_wrlat = memStats['wrlat']
+mem_wrlat_avg = np.average(mem_wrlat)
+print("Mem rd:", format(mem_rd_avg,","))
+print("Mem wr:", format(mem_wr_avg,","))
+print("Mem rdlat:", format(mem_rdlat_avg,","))
+print("Mem wrlat:", format(mem_wrlat_avg,","))
 
 def main(argv):
     appName = ''
@@ -137,7 +150,9 @@ def main(argv):
     if isWrite:
         with open(csvPath, 'a+') as f:
             writer = csv.writer(f)
-            datarow = [appName, format(totalCycles_avg,","), format(totalInstrs_avg,","), ipc_avg, l1d_hit_rate_avg, l1i_hit_rate_avg, l1s_hit_rate_avg, l2_hit_rate_avg, l3_hit_rate_avg]
+            datarow = [appName, format(totalCycles_avg,","), format(totalInstrs_avg,","), ipc_avg, 
+                       l1d_hit_rate_avg, l1i_hit_rate_avg, l1s_hit_rate_avg, l2_hit_rate_avg, l3_hit_rate_avg, 
+                       format(mem_rd_avg,","), format(mem_wr_avg,","), format(mem_rdlat_avg,","), format(mem_wrlat_avg,",")]
             writer.writerow(datarow)
 
 
