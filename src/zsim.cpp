@@ -101,6 +101,7 @@ BOOL simulateIndexAccesses {false};
 BOOL simulateComputeAccesses {false};
 BOOL simulateAccumAccesses {false};
 uint64_t numIns {0};
+uint64_t numGeneralIns {0};
 uint64_t numIndexIns {0};
 uint64_t numComputeIns {0};
 InsType insType {INS_GENERAL};
@@ -162,7 +163,9 @@ VOID FakeRDTSCPost(THREADID tid, REG* eax, REG* edx);
 VOID VdsoInstrument(INS ins);
 VOID FFThread(VOID* arg);
 
-VOID RecordIndexIp(VOID* ip, THREADID tid);
+VOID RecordGeneralIp(VOID* ip, THREADID tid, InsType type);
+VOID RecordIndexIp(VOID* ip, THREADID tid, InsType type);
+VOID RecordComputeIp(VOID* ip, THREADID tid, InsType type);
 
 /* Indirect analysis calls to work around PIN's synchronization
  *
@@ -403,13 +406,13 @@ VOID FFIBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type
 }
 
 // One-off, called after we go from NFF to FF
-VOID FFIEntryBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
+VOID FFIEntryBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType bblType) {
     ffiInstrsDone += *ffiFFStartInstrs - *ffiPrevFFStartInstrs; //add all instructions executed in the NFF phase
     FFIAdvance();
     assert(ffiNFF);
     ffiNFF = false;
     fPtrs[tid] = GetFFPtrs();
-    FFIBasicBlock(tid, bblAddr, bblInfo, type);
+    FFIBasicBlock(tid, bblAddr, bblInfo, bblType);
 }
 
 VOID RecordIp(VOID* ip, THREADID tid) {
@@ -417,13 +420,18 @@ VOID RecordIp(VOID* ip, THREADID tid) {
         ++numIns;
 }
 
-VOID RecordIndexIp(VOID* ip, THREADID tid) {
-    if (simulateIndexAccesses == true)
+VOID RecordGeneralIp(VOID* ip, THREADID tid, InsType type) {
+    if (type == INS_GENERAL)
+        ++numGeneralIns;
+}
+
+VOID RecordIndexIp(VOID* ip, THREADID tid, InsType type) {
+    if (type == INS_INDEX)
         ++numIndexIns;
 }
 
-VOID RecordComputeIp(VOID* ip, THREADID tid) {
-    if (simulateComputeAccesses == true)
+VOID RecordComputeIp(VOID* ip, THREADID tid, InsType type) {
+    if (type == INS_COMPUTE)
         ++numComputeIns;
 }
 
@@ -667,15 +675,24 @@ VOID Instruction(INS ins) {
         AFUNPTR PredSloadFuncPtr = (AFUNPTR) IndirectPredSloadSingle;
 //        AFUNPTR PredSstoreFuncPtr = (AFUNPTR) IndirectPredSstoreSingle;
         INS_InsertPredicatedCall(
+            ins, IPOINT_BEFORE, (AFUNPTR)RecordGeneralIp, 
+            IARG_INST_PTR,
+            IARG_THREAD_ID,
+            IARG_UINT32, static_cast<UINT32>(insType),
+            IARG_END);
+
+        INS_InsertPredicatedCall(
             ins, IPOINT_BEFORE, (AFUNPTR)RecordIndexIp, 
             IARG_INST_PTR,
             IARG_THREAD_ID,
+            IARG_UINT32, static_cast<UINT32>(insType),
             IARG_END);
 
         INS_InsertPredicatedCall(
             ins, IPOINT_BEFORE, (AFUNPTR)RecordComputeIp, 
             IARG_INST_PTR,
             IARG_THREAD_ID,
+            IARG_UINT32, static_cast<UINT32>(insType),
             IARG_END);
 
         INS_InsertPredicatedCall(
@@ -802,10 +819,12 @@ VOID Instruction(INS ins) {
 
 VOID Trace(TRACE trace, VOID *v) {
     if (simulateAccesses){
-        if (simulateComputeAccesses && !simulateAccumAccesses) insType = INS_COMPUTE;
-        if (simulateIndexAccesses && !simulateAccumAccesses) insType = INS_INDEX;
-        if ((simulateComputeAccesses ^ simulateIndexAccesses) && simulateAccumAccesses){
-            insType = INS_ACCUM;
+        insType = INS_GENERAL;
+        if (!simulateAccumAccesses) {
+            if (simulateIndexAccesses) insType = INS_INDEX;
+            if (simulateComputeAccesses) insType = INS_COMPUTE;
+        } else { // simulateAccumAccesses
+            if (simulateComputeAccesses ^ simulateIndexAccesses) insType = INS_ACCUM;
         }
         if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
             // Visit every basic block in the trace
@@ -1294,6 +1313,7 @@ VOID AfterForkInChild(THREADID tid, const CONTEXT* ctxt, VOID * arg) {
 
 VOID Fini(int code, VOID * v) {
     info("Finished, code %d", code);
+    info("GeneralInsNum/InsNum: %ld/%ld=%lf", numGeneralIns, numIns, ((double)numGeneralIns/numIns));
     info("IndexInsNum/InsNum: %ld/%ld=%lf", numIndexIns, numIns, ((double)numIndexIns/numIns));
     info("ComputeInsNum/InsNum: %ld/%ld=%lf", numComputeIns, numIns, ((double)numComputeIns/numIns));
     //NOTE: In fini, it appears that info() and writes to stdout in general won't work; warn() and stderr still work fine.

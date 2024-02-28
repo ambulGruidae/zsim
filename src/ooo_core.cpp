@@ -545,10 +545,10 @@ void OOOCore::PredStoreFunc(THREADID tid, ADDRINT predStorePC, ADDRINT addr, BOO
     else core->predFalseStore();
 }
 
-void OOOCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType type) {
-    if (type == INS_GENERAL || type == INS_COMPUTE) {
+void OOOCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo, InsType bblType) {
+    if (bblType == INS_GENERAL || bblType == INS_COMPUTE) {
         OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-        core->bbl(bblAddr, bblInfo, type);
+        core->bbl(bblAddr, bblInfo, bblType);
 
         while (core->curCycle > core->phaseEndCycle) {
             core->phaseEndCycle += zinfo->phaseLength;

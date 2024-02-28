@@ -36,7 +36,7 @@
 #include "pad.h"
 
 // Uncomment to enable stall stats
-// #define OOO_STALL_STATS
+#define OOO_STALL_STATS
 
 class FilterCache;
 
