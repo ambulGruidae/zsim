@@ -5,5 +5,8 @@ tests/
 zsim*
 misc/*
 heartbeat
-.cfg
+*.cfg
+.*
+*.md
+*.txt
 
