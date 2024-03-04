@@ -823,8 +823,9 @@ VOID Trace(TRACE trace, VOID *v) {
         if (!simulateAccumAccesses) {
             if (simulateIndexAccesses) insType = INS_INDEX;
             if (simulateComputeAccesses) insType = INS_COMPUTE;
+            // info("Simulating access type: %d", insType);
         } else { // simulateAccumAccesses
-            if (simulateComputeAccesses ^ simulateIndexAccesses) insType = INS_ACCUM;
+            if (simulateComputeAccesses || simulateIndexAccesses) insType = INS_ACCUM;
         }
         if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
             // Visit every basic block in the trace
