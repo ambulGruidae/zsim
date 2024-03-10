@@ -11,18 +11,21 @@ import csv
 # matrices    = ['0.013%', '0.029%', '0.054%', '0.254%', '0.507%', 'Gmean']
 # diagonal
 # matrices    = ['0.005%', '0.019%', '0.043%', '0.245%', '0.497%', 'Gmean']
-# matrices    = ['0.005%', '0.019%', '0.044%', '0.245%', '0.497%', 'Gmean']
 # matrices    = ['16', '17', '18', '19', '20', '21', 'Gmean']
-matrices    = ['3', '6', '12', '24', '48', 'Gmean']
-methods     = ['Nop', 'Idx', 'Idx+Acc']
-# methods     = ['Nop', 'Idx+Acc']
+# matrices    = ['3', '6', '12', '24', '48', 'Gmean']
+# matrices    = ['arabic', 'orkut', 'nlpkkt240', 'p2p-Gnutella31', 'pokec', 'uk-2005', 
+            #    'webbase-2001', 'livejournal', 'uk-2002', 'Gmean']
+matrices    = ['arb', 'ork', 'nlp', 'p2p', 'pok', 'ukl', 
+               'web', 'lj', 'uk', 'Gmean']
+# methods     = ['Nop', 'Idx', 'Idx+Acc']
+methods     = ['Nop', 'Idx+Acc']
 
 def read_file(filename):
     with open(filename, newline='') as file:
         reader = csv.reader(file, delimiter=',', quotechar='"')
         data = [[row[0], float(row[1].replace(',',''))] for row in reader if len(row) >= 2]
-        groups = [[data[i], data[i+1], data[i+2]] for i in range(0, len(data), 3)]
-        # groups = [[data[i], data[i+1]] for i in range(0, len(data), 2)]
+        # groups = [[data[i], data[i+1], data[i+2]] for i in range(0, len(data), 3)]
+        groups = [[data[i], data[i+1]] for i in range(0, len(data), 2)]
     return groups
 
 # print(groups)
@@ -39,7 +42,7 @@ def gen_filename(filename_prefix, app_name, fig_format):
 
 def draw(filename, appname):
     groups = read_file(filename)
-    titlename = 'App-SpGEMM'
+    titlename = 'App-CC'
 
     fig = plt.figure(figsize = (5, 3))
     bwidth = 1 / (1.25 + len(methods))
@@ -56,13 +59,13 @@ def draw(filename, appname):
     ax = plt.gca()
     ax.set_title(titlename, fontweight = 'bold')
     # ax.set_xlabel('Sparsity (Diag)', fontweight = 'bold')
-    ax.set_xlabel('#times the number of rMAT edges (m = n = 8192)', fontweight = 'bold')
+    # ax.set_xlabel('', fontweight = 'bold')
     ax.set_ylabel('Speedup over Nop', fontweight = 'bold')
-    ax.set_xticks(np.arange(len(matrices)) + 1 * bwidth)
+    ax.set_xticks(np.arange(len(matrices)) + 0.5 * bwidth)
     ax.set_xticklabels(matrices)
     ax.set_yticks(np.arange(0, 1.1 * maxVal + 0.5, int(maxVal+0.5)/5))
     ax.grid(alpha = 0.64, axis = 'y', linestyle = '--')
-    ax.legend(loc = 'upper left', framealpha = 1.0, ncol = 3, fontsize = 10)
+    ax.legend(loc = 'upper right', framealpha = 1.0, ncol = 3, fontsize = 10)
     ax.axhline(y = 1, linestyle = '--', color = 'k')
     # ax.axvline(x = 4.73, linestyle = '--', color = 'k')
 
